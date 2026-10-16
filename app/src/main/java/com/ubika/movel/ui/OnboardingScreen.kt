@@ -1,5 +1,7 @@
 package com.ubika.movel.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -21,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.ubika.movel.UbikaDarkBackground
 import com.ubika.movel.UbikaPurple
 import com.ubika.movel.network.UbikaApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class Step { INTRO, AUTH, PLAN, PAIR }
@@ -124,9 +128,28 @@ private fun traduzErro(code: String) = when {
     else -> "Erro: $code"
 }
 
-// ---------- Passo 3: plano / checkout ----------
+// ---------- Passo 3: plano / checkout web externo ----------
 @Composable
 private fun PlanStep(plan: String, onNext: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var awaitingSid by remember { mutableStateOf<String?>(null) }
+    var paid by remember { mutableStateOf(plan == "pro") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    // Enquanto aguarda pagamento, faz polling do status da sessão
+    LaunchedEffect(awaitingSid) {
+        val sid = awaitingSid ?: return@LaunchedEffect
+        while (!paid) {
+            delay(4000)
+            if (UbikaApi.checkoutStatus(sid) == "paid") {
+                UbikaApi.getMe()
+                paid = true
+            }
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -142,16 +165,38 @@ private fun PlanStep(plan: String, onNext: () -> Unit) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("UBIKA TRIAL", color = UbikaPurple, fontSize = 18.sp, fontWeight = FontWeight.Black)
-            Text("7 dias grátis — todos os recursos", color = Color.White, fontSize = 14.sp)
+            Text(if (paid) "UBIKA PRO" else "UBIKA TRIAL", color = UbikaPurple, fontSize = 18.sp, fontWeight = FontWeight.Black)
+            Text(if (paid) "Plano ativo — todos os recursos liberados" else "7 dias grátis — todos os recursos", color = Color.White, fontSize = 14.sp)
             Text("Downloads remotos ilimitados\nStream em qualquer lugar\nCatálogo completo", color = Color.Gray, fontSize = 12.sp, lineHeight = 18.sp)
-            Text("Depois R$ 19,90/mês", color = Color.Gray, fontSize = 11.sp)
+            if (!paid) Text("Depois R$ 19,90/mês", color = Color.Gray, fontSize = 11.sp)
         }
-        Text(
-            "O pagamento será pela Play Store quando o app for publicado — por enquanto seu trial já está ativo.",
-            color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center
-        )
-        UbikaButton("CONTINUAR COM TRIAL") { onNext() }
+
+        if (paid) {
+            Text("✓ PRO ativado — obrigado!", color = Color(0xFF66BB6A), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            UbikaButton("CONTINUAR") { onNext() }
+        } else {
+            error?.let { Text(it, color = Color(0xFFEF5350), fontSize = 12.sp, textAlign = TextAlign.Center) }
+            UbikaButton(if (busy) "ABRINDO…" else "ASSINAR PRO — R$ 19,90/mês", enabled = !busy) {
+                scope.launch {
+                    busy = true; error = null
+                    val r = UbikaApi.createCheckout()
+                    busy = false
+                    if (r.url.isNotEmpty()) {
+                        awaitingSid = r.sid
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.url))) }
+                        catch (e: Exception) { error = "Não consegui abrir o navegador." }
+                    } else error = "Falha ao criar pagamento: ${r.error ?: "sem resposta"}"
+                }
+            }
+            if (awaitingSid != null) {
+                Text("Pagamento aberto no navegador — verificando sozinho…", color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center)
+            }
+            Text(
+                "O pagamento acontece numa página segura fora do app — nada de dados de cartão no Ubika.",
+                color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center
+            )
+            UbikaButton("CONTINUAR COM TRIAL") { onNext() }
+        }
     }
 }
 

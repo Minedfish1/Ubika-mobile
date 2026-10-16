@@ -188,6 +188,53 @@ object UbikaApi {
         }
     }
 
+    /** Cria sessão de checkout web → retorna {sid, url} para abrir no navegador. */
+    suspend fun createCheckout(plan: String = "pro"): CheckoutResult = withContext(Dispatchers.IO) {
+        val body = """{"plan":${com.google.gson.JsonPrimitive(plan)}}"""
+            .toRequestBody("application/json".toMediaType())
+        val request = Request.Builder().url("$BASE_URL/checkout").post(body).build()
+        try {
+            client.newCall(request).execute().use { response ->
+                val respBody = response.body?.string()
+                if (!response.isSuccessful) return@withContext CheckoutResult(error = errorMessage(response.code, respBody))
+                val o = JsonParser.parseString(respBody).asJsonObject
+                CheckoutResult(
+                    sid = o.get("sid")?.asString ?: "",
+                    url = o.get("url")?.asString ?: ""
+                )
+            }
+        } catch (e: Exception) {
+            CheckoutResult(error = e.message)
+        }
+    }
+
+    /** Status do checkout: "pending" | "paid" — polling após voltar do navegador. */
+    suspend fun checkoutStatus(sid: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(buildUrl("checkout/$sid/status")).build()
+        try {
+            client.newCall(request).execute().use { response ->
+                val o = JsonParser.parseString(response.body?.string() ?: "").asJsonObject
+                o?.get("status")?.asString ?: "pending"
+            }
+        } catch (e: Exception) { "pending" }
+    }
+
+    /** Dados frescos da conta (plano atualizado após pagamento). */
+    suspend fun getMe(): AuthResult = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(buildUrl("auth/me")).build()
+        try {
+            client.newCall(request).execute().use { response ->
+                val o = JsonParser.parseString(response.body?.string() ?: "").asJsonObject
+                AuthResult(
+                    token = sessionToken,
+                    userId = o?.get("userId")?.asString ?: "",
+                    email = o?.get("email")?.asString ?: "",
+                    plan = o?.get("plan")?.asString ?: ""
+                )
+            }
+        } catch (e: Exception) { AuthResult(error = e.message) }
+    }
+
     /** Jogos instalados = downloads concluídos no PC (state == "done"). */
     suspend fun getInstalledGames(): List<InstalledGame> = withContext(Dispatchers.IO) {
         try {
@@ -246,6 +293,12 @@ data class AuthResult(
     val userId: String = "",
     val email: String = "",
     val plan: String = "",
+    val error: String? = null
+)
+
+data class CheckoutResult(
+    val sid: String = "",
+    val url: String = "",
     val error: String? = null
 )
 
