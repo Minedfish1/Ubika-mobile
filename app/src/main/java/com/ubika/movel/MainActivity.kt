@@ -69,10 +69,18 @@ class MainActivity : ComponentActivity() {
                     var showSplash by remember { mutableStateOf(true) }
                     var loggedIn by remember { mutableStateOf(prefs.getString("session_token", null) != null) }
 
-                    // Restaura sessão persistida
+                    // Restaura sessão persistida — e valida no servidor: se morreu, volta pro login
                     LaunchedEffect(Unit) {
-                        prefs.getString("session_token", null)?.let { com.ubika.movel.network.UbikaApi.sessionToken = it }
+                        val token = prefs.getString("session_token", null)
+                        if (token == null) return@LaunchedEffect
+                        com.ubika.movel.network.UbikaApi.sessionToken = token
                         prefs.getString("user_id", null)?.let { com.ubika.movel.network.UbikaApi.userId = it }
+                        val me = com.ubika.movel.network.UbikaApi.getMe()
+                        if (me.userId.isEmpty()) {
+                            prefs.edit().remove("session_token").remove("user_id").apply()
+                            com.ubika.movel.network.UbikaApi.sessionToken = ""
+                            loggedIn = false
+                        }
                     }
 
                     when {
