@@ -94,7 +94,6 @@ object UbikaApi {
                 throw e
             }
         }
-}
 
     /** Status do PC host visto pelo relay: { online, streamHost }. */
     suspend fun getPcStatus(): PcStatus = withContext(Dispatchers.IO) {
