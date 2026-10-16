@@ -1,6 +1,8 @@
 package com.ubika.movel.ui
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.compose.animation.*
@@ -47,7 +49,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun MainConsoleScreen() {
+fun MainConsoleScreen(onLogout: () -> Unit = {}) {
     val context = LocalContext.current
     val soundManager = remember { SoundManager(context) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -60,13 +62,43 @@ fun MainConsoleScreen() {
     var globalSearchQuery by remember { mutableStateOf("") }
     var selectedGameForDetail by remember { mutableStateOf<Game?>(null) }
 
+    // Perfil / plano
+    val prefs = remember { context.getSharedPreferences("ubika_prefs", Context.MODE_PRIVATE) }
+    var showProfile by remember { mutableStateOf(false) }
+    var avatarPath by remember { mutableStateOf(prefs.getString("avatar_path", "") ?: "") }
+    var plan by remember { mutableStateOf("") }
+    var planExpiresAt by remember { mutableStateOf(0L) }
+    var renewSid by remember { mutableStateOf<String?>(null) }
+
     val padType by rememberPadType()
     val glyphs = GamepadManager.glyphsFor(padType)
 
     LaunchedEffect(Unit) {
         UbikaSocket.connect(UbikaApi.userId)
         realDeviceRes(context)?.let { (w, h, fps) -> UbikaSocket.setClientResolution(w, h, fps) }
+        val me = UbikaApi.getMe()
+        if (me.effectivePlan.isNotEmpty()) { plan = me.effectivePlan; planExpiresAt = me.planExpiresAt }
         while (true) { delay(1000); currentTime = LocalTime.now() }
+    }
+
+    // Som suave ao trocar de tela (não toca na primeira composição)
+    var firstScreen by remember { mutableStateOf(true) }
+    LaunchedEffect(currentScreen) {
+        if (firstScreen) { firstScreen = false } else soundManager.playTransition()
+    }
+
+    // Polling de renovação — se o usuário pagou no navegador, vira pro sozinho
+    LaunchedEffect(renewSid) {
+        val sid = renewSid ?: return@LaunchedEffect
+        while (true) {
+            delay(4000)
+            if (UbikaApi.checkoutStatus(sid) == "paid") {
+                val me = UbikaApi.getMe()
+                plan = me.effectivePlan; planExpiresAt = me.planExpiresAt
+                renewSid = null
+                break
+            }
+        }
     }
 
     // App sai do background → socket morreu → reconecta e reanuncia resolução
@@ -90,6 +122,7 @@ fun MainConsoleScreen() {
             onBack = { selectedGameForDetail = null }
         )
     } else {
+        Box(Modifier.fillMaxSize()) {
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
@@ -155,11 +188,36 @@ fun MainConsoleScreen() {
                                         Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color.White, modifier = Modifier.size(24.dp))
                                     }
                                     Text(currentTime.format(timeFormatter), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                    AsyncImage(model = "https://i.imgur.com/6V7z8zG.png", contentDescription = "Perfil", contentScale = ContentScale.Crop, modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .border(2.dp, Color(0xFF7C4DFF), CircleShape)
+                                            .clickable { soundManager.playClickA(); showProfile = true }
+                                    ) {
+                                        AvatarImage(avatarPath, Modifier.fillMaxSize())
+                                    }
                                 }
                             }
                         }
                     }
+                }
+
+                // Banner de plano: expirado / expira em breve / trial
+                val renewAction: () -> Unit = {
+                    scope.launch {
+                        val r = UbikaApi.createCheckout()
+                        if (r.url.isNotEmpty()) {
+                            renewSid = r.sid
+                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.url))) } catch (_: Exception) {}
+                        }
+                    }
+                }
+                val daysLeft = if (planExpiresAt > 0) ((planExpiresAt - System.currentTimeMillis()) / 86400000f).toInt().coerceAtLeast(0) else -1
+                when {
+                    plan == "expired" -> RenewBanner("SEU PLANO EXPIROU — TOQUE PARA RENOVAR", Color(0xFF5B1B2E), renewAction)
+                    plan == "pro" && daysLeft in 0..5 -> RenewBanner("UBIKA PRO EXPIRA EM ${daysLeft}d — TOQUE PARA RENOVAR", Color(0xFF311B52), renewAction)
+                    plan == "trial" -> RenewBanner("TRIAL — TOQUE PARA ASSINAR PRO R$ 19,90", Color(0xFF1E0D33), renewAction)
                 }
 
                 Box(modifier = Modifier.weight(1f)) {
@@ -188,6 +246,37 @@ fun MainConsoleScreen() {
                 }
             }
         }
+
+        if (showProfile) {
+            ProfileSheet(
+                soundManager = soundManager,
+                avatarPath = avatarPath,
+                onAvatar = { path -> avatarPath = path; prefs.edit().putString("avatar_path", path).apply() },
+                plan = plan,
+                planExpiresAt = planExpiresAt,
+                onClose = { showProfile = false },
+                onLogout = {
+                    prefs.edit().remove("session_token").remove("user_id").remove("avatar_path").apply()
+                    UbikaApi.sessionToken = ""
+                    UbikaApi.userId = ""
+                    UbikaSocket.disconnect()
+                    showProfile = false
+                    onLogout()
+                }
+            )
+        }
+        }
+    }
+}
+
+@Composable
+private fun RenewBanner(text: String, bg: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(bg).clickable { onClick() }.padding(horizontal = 24.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black)
     }
 }
 

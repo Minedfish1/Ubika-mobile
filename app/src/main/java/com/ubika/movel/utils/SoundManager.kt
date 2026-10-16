@@ -10,14 +10,24 @@ import com.ubika.movel.R
 
 class SoundManager(private val context: Context) {
 
-    fun playClickA() = MediaPlayer.create(context, R.raw.click_a)?.start()
-    fun playClickB() = MediaPlayer.create(context, R.raw.click_b)?.start()
+    // Volume baixo + liberação no fim: suave e sem vazar MediaPlayer
+    private fun soft(res: Int, vol: Float = 0.32f) {
+        MediaPlayer.create(context, res)?.apply {
+            setVolume(vol, vol)
+            setOnCompletionListener { release() }
+            start()
+        }
+    }
 
-    // Agora ambos usam o slide_a (som melhor)
-    fun playSlideRB() = MediaPlayer.create(context, R.raw.slide_a)?.start()
-    fun playSlideLB() = MediaPlayer.create(context, R.raw.slide_a)?.start()
+    fun playClickA() = soft(R.raw.click_a)
+    fun playClickB() = soft(R.raw.click_b, 0.25f) // ainda mais suave
 
-    fun playNotification() = MediaPlayer.create(context, R.raw.notificacao)?.start()
+    // Transições de tela: slide suave
+    fun playSlideRB() = soft(R.raw.slide_a, 0.30f)
+    fun playSlideLB() = soft(R.raw.slide_a, 0.30f)
+    fun playTransition() = soft(R.raw.slide_a, 0.22f) // o mais suave
+
+    fun playNotification() = soft(R.raw.notificacao, 0.5f)
 
     // --- SISTEMA DE NOTIFICAÇÃO DO ANDROID ---
     private val channelId = "ubika_downloads"

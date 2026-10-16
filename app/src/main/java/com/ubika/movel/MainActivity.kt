@@ -92,7 +92,12 @@ class MainActivity : ComponentActivity() {
                                 .apply()
                             loggedIn = true
                         })
-                        else -> com.ubika.movel.ui.MainConsoleScreen()
+                        else -> com.ubika.movel.ui.MainConsoleScreen(onLogout = {
+                            prefs.edit().remove("session_token").remove("user_id").apply()
+                            com.ubika.movel.network.UbikaApi.sessionToken = ""
+                            com.ubika.movel.network.UbikaApi.userId = ""
+                            loggedIn = false
+                        })
                     }
                 }
             }

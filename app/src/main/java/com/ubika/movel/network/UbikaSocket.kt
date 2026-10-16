@@ -35,9 +35,10 @@ object UbikaSocket {
                 reconnectionDelay = 1000
                 reconnectionDelayMax = 10000
                 timeout = 10000
-                if (SHARED_SECRET.isNotEmpty()) {
-                    auth = mapOf("token" to SHARED_SECRET)
-                }
+                // Sessão autentica o socket — segredo compartilhado não sai no APK
+                val sess = UbikaApi.sessionToken
+                auth = if (sess.isNotEmpty()) mapOf("session" to sess)
+                       else mapOf("token" to SHARED_SECRET) // fallback compat (remover em prod)
             }
             mSocket = IO.socket(SERVER_URL, opts)
             mSocket?.on(Socket.EVENT_CONNECT) {
@@ -90,16 +91,18 @@ object UbikaSocket {
         }
     }
 
-    /** Inicia um download remoto no PC host. */
+    /** Inicia um download remoto no PC host — magnet ou link direto (fontes sem torrent). */
     fun sendInstallCommand(
         gameName: String,
         magnetLink: String,
+        directLink: String = "",
         onResult: ((ok: Boolean, error: String?, resp: JSONObject?) -> Unit)? = null
     ) {
         val payload = JSONObject()
             .put("action", "iniciar_download")
             .put("gameName", gameName)
             .put("magnetLink", magnetLink)
+            .put("link", directLink)
         sendCommand(payload, onResult)
     }
 

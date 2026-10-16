@@ -52,6 +52,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
     var isLoading by remember { mutableStateOf(false) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var isLastPage by remember { mutableStateOf(false) }
+    var totalResults by remember { mutableStateOf(0) }
 
     // Estados do Modal
     var expandedGame by remember { mutableStateOf<Game?>(null) }
@@ -80,6 +81,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
         try {
             val response = UbikaApi.getCatalogGames(search = globalSearchQuery, page = 1)
             allGames = response.games
+            totalResults = response.total
             isLastPage = response.isLastPage
         } catch (e: Exception) {
             // Tratar erro
@@ -131,35 +133,53 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     modifier = Modifier.fillMaxSize()
                 ) {
 
-                    // --- PÓDIO: 3 mais jogados da semana (só sem busca ativa) ---
-                    if (globalSearchQuery.isBlank() && trending.isNotEmpty()) {
-                        item {
-                            Column {
-                                Text("MAIS JOGADOS DA SEMANA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                PodiumRow(trending.take(3)) { game ->
-                                    soundManager.playClickA(); expandedGame = game; selectedVersion = null
+                    // --- MODO DESTAQUES (sem busca): pódio + EM ALTA ---
+                    if (globalSearchQuery.isBlank()) {
+                        if (trending.isNotEmpty()) {
+                            item {
+                                Column {
+                                    Text("MAIS JOGADOS DA SEMANA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    PodiumRow(trending.take(3)) { game ->
+                                        soundManager.playClickA(); expandedGame = game; selectedVersion = null
+                                    }
+                                }
+                            }
+                            item {
+                                Column {
+                                    Text("EM ALTA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        itemsIndexed(trending.drop(3)) { index, game ->
+                                            AnimatedEntry(index) {
+                                                Column(modifier = Modifier.width(110.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
+                                                    GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)))
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    Text(game.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-
-                    // --- CATÁLOGO COMPLETO ---
-                    item {
-                        Column {
-                            Text(if (globalSearchQuery.isNotBlank()) "RESULTADOS DA PESQUISA" else "TODOS OS JOGOS DISPONÍVEIS", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Os jogos dinâmicos — entrada escalonada (fade + subida)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                itemsIndexed(allGames) { index, game ->
-                                    AnimatedEntry(index) {
-                                        Column(modifier = Modifier.width(110.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
-                                            GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)))
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text(game.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                        }
-                                    }
+                        item {
+                            Text(
+                                "Use a barra de pesquisa acima para achar qualquer jogo do catálogo.",
+                                color = Color.Gray, fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                            )
+                        }
+                    } else {
+                        // --- MODO BUSCA: resultados em lista vertical ---
+                        item {
+                            Text("RESULTADOS ($totalResults)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        itemsIndexed(allGames) { index, game ->
+                            AnimatedEntry(index) {
+                                SearchResultRow(game) {
+                                    soundManager.playClickA(); expandedGame = game; selectedVersion = null
                                 }
                             }
                         }
@@ -192,72 +212,85 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
-                        modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.70f).border(1.dp, Color(0xFF512DA8).copy(alpha = 0.6f), RoundedCornerShape(24.dp)).clickable(enabled = false) {},
+                        modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.85f).border(1.dp, Color(0xFF512DA8).copy(alpha = 0.6f), RoundedCornerShape(24.dp)).clickable(enabled = false) {},
                         shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0510))
                     ) {
-                        Column(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510)))).padding(20.dp)) {
+                        // Layout de uma coluna — cabe bem no celular: capa → fontes → baixar
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Brush.verticalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510))))
+                                .verticalScroll(rememberScrollState())
+                                .padding(20.dp)
+                        ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp, maxLines = 1)
+                                Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 2, modifier = Modifier.weight(1f))
                                 TextButton(onClick = { expandedGame = null }, contentPadding = PaddingValues(0.dp)) {
-                                    Text("✕ FECHAR", color = Color(0xFFB39DDB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("✕", color = Color(0xFFB39DDB), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                            Row(modifier = Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                GameCover(game, Modifier.weight(0.9f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(12.dp)))
+                            GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(12.dp)))
 
-                                Box(modifier = Modifier.weight(1.2f).fillMaxHeight().background(Color(0xFF140822), RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF311B52), RoundedCornerShape(12.dp)).padding(16.dp)) {
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        Text("Requisitos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        val reqs = listOf("SO: Win 10/11", "RAM: 8/16 GB", "DirectX: 12", "Arm: 70GB", "GPU Dedicada", "CPU: Quad-Core")
-                                        Row(modifier = Modifier.fillMaxWidth()) {
-                                            Column(modifier = Modifier.weight(1f)) { reqs.take(3).forEach { req -> Text("• $req", color = Color(0xFFB39DDB), fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp)) } }
-                                            Column(modifier = Modifier.weight(1f)) { reqs.drop(3).forEach { req -> Text("• $req", color = Color(0xFFB39DDB), fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp)) } }
-                                        }
-                                    }
-                                }
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                                Box(modifier = Modifier.weight(1.2f).fillMaxHeight().background(Color(0xFF140822), RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF311B52), RoundedCornerShape(12.dp)).padding(16.dp)) {
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        Text("Versões / Fontes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            items(game.versions) { version ->
-                                                val isSelected = selectedVersion == version
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth().background(if (isSelected) Color(0xFF512DA8) else Color(0xFF1E0D33), RoundedCornerShape(8.dp)).border(1.dp, if (isSelected) Color(0xFF9575CD) else Color.Transparent, RoundedCornerShape(8.dp)).clickable { selectedVersion = version }.padding(12.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(version.source, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                                    Text(version.size, color = Color(0xFFD1C4E9), fontSize = 11.sp)
-                                                }
-                                            }
-                                        }
+                            Text("ESCOLHA A FONTE", color = Color(0xFFB39DDB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                                        Spacer(modifier = Modifier.height(12.dp))
-
-                                        val btnText = if (selectedVersion != null) "Instalar" else "Selecione versão"
-                                        val btnColor = if (selectedVersion != null) Color.White else Color.Gray
-
-                                        Button(
-                                            onClick = {
-                                                selectedVersion?.let { ver ->
-                                                    soundManager.playClickA()
-                                                    coroutineScope.launch { UbikaSocket.sendInstallCommand(game.title, ver.magnet) }
-                                                    expandedGame = null
-                                                }
-                                            },
-                                            enabled = selectedVersion != null, modifier = Modifier.fillMaxWidth().height(42.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF673AB7), disabledContainerColor = Color(0xFF1E0D33)),
-                                            shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(0.dp)
+                            game.versions.forEach { version ->
+                                val isSelected = selectedVersion == version
+                                val hasMagnet = version.magnet.isNotBlank()
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) Color(0xFF512DA8) else Color(0xFF140822))
+                                        .border(1.dp, if (isSelected) Color(0xFF9575CD) else Color(0xFF311B52), RoundedCornerShape(10.dp))
+                                        .clickable { selectedVersion = version }
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        // badge da fonte + tipo de download
+                                        Box(
+                                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(if (isSelected) Color(0xFF7C4DFF) else Color(0xFF311B52)).padding(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
-                                            Text(text = btnText, color = btnColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            Text(version.source.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
                                         }
+                                        Text(if (hasMagnet) "torrent" else "link direto", color = Color(0xFFB39DDB), fontSize = 11.sp)
                                     }
+                                    Text(version.size, color = Color(0xFFD1C4E9), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            val sel = selectedVersion
+                            val canDownload = sel != null && (sel.magnet.isNotBlank() || sel.links.isNotEmpty())
+                            Button(
+                                onClick = {
+                                    sel?.let { ver ->
+                                        soundManager.playClickA()
+                                        coroutineScope.launch {
+                                            UbikaSocket.sendInstallCommand(game.title, ver.magnet, ver.links.firstOrNull() ?: "")
+                                        }
+                                        expandedGame = null
+                                    }
+                                },
+                                enabled = canDownload,
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF), disabledContainerColor = Color(0xFF1E0D33)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    if (sel == null) "SELECIONE UMA FONTE" else "BAIXAR NO PC",
+                                    color = if (canDownload) Color.White else Color.Gray,
+                                    fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp
+                                )
                             }
                         }
                     }
@@ -349,4 +382,34 @@ private fun AnimatedEntry(index: Int, content: @Composable () -> Unit) {
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(350), label = "e_a")
     val dy by animateDpAsState(if (visible) 0.dp else 22.dp, tween(350), label = "e_y")
     Box(Modifier.graphicsLayer { this.alpha = alpha; translationY = dy.toPx() }) { content() }
+}
+/** Linha de resultado da busca: capa + título + chips de fonte + tamanho. */
+@Composable
+private fun SearchResultRow(game: Game, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF140822))
+            .border(1.dp, Color(0xFF311B52), RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        GameCover(game, Modifier.size(52.dp, 68.dp).clip(RoundedCornerShape(8.dp)))
+        Column(Modifier.weight(1f)) {
+            Text(game.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                game.versions.take(3).forEach { v ->
+                    Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFF311B52)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                        Text(v.source, color = Color(0xFFB39DDB), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (game.versions.size > 3) Text("+${game.versions.size - 3}", color = Color.Gray, fontSize = 9.sp)
+            }
+        }
+        Text(game.versions.firstOrNull()?.size ?: "", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
 }

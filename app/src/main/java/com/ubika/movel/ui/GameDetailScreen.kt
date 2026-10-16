@@ -174,7 +174,13 @@ fun GameDetailScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(version.source, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(version.source, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            val tipo = if (version.magnet.isNotBlank()) "TORRENT" else if (version.links.isNotEmpty()) "DIRETO" else "INDISP."
+                                            Box(modifier = Modifier.background(Color(0xFF311B52), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                                Text(tipo, color = Color(0xFFB39DDB), fontSize = 9.sp, fontWeight = FontWeight.Black)
+                                            }
+                                        }
                                         Text(version.size, color = Color(0xFFD1C4E9), fontSize = 11.sp)
                                     }
                                 }
@@ -183,8 +189,9 @@ fun GameDetailScreen(
                             Spacer(modifier = Modifier.height(10.dp))
 
                             // Botão de Download / Instalação (Dispara via Socket.io para o PC)
-                            val btnText = if (selectedVersion != null) "INICIAR DOWNLOAD (${selectedVersion!!.size})" else "SELECIONE UMA VERSÃO"
-                            val btnColor = if (selectedVersion != null) Color(0xFF673AB7) else Color(0xFF1E0D33)
+                            val downloadable = selectedVersion?.let { it.magnet.isNotBlank() || it.links.isNotEmpty() } == true
+                            val btnText = if (downloadable) "INICIAR DOWNLOAD (${selectedVersion!!.size})" else "SELECIONE UMA VERSÃO"
+                            val btnColor = if (downloadable) Color(0xFF673AB7) else Color(0xFF1E0D33)
 
                             Button(
                                 onClick = {
@@ -192,11 +199,11 @@ fun GameDetailScreen(
                                         soundManager.playClickA()
                                         coroutineScope.launch {
                                             // Dispara a ordem de download para o servidor da AWS / Daemon do PC
-                                            UbikaSocket.sendInstallCommand(game.title, ver.magnet)
+                                            UbikaSocket.sendInstallCommand(game.title, ver.magnet, ver.links.firstOrNull() ?: "")
                                         }
                                     }
                                 },
-                                enabled = selectedVersion != null,
+                                enabled = downloadable,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(45.dp),

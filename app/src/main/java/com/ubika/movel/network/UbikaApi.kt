@@ -31,7 +31,9 @@ object UbikaApi {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS) // maior que os 20s de espera da AWS pelo PC
         .addInterceptor { chain ->
-            val b = chain.request().newBuilder().header("x-ubika-token", SHARED_SECRET)
+            // Sessão é a credencial do app — o segredo compartilhado (extraível do
+            // APK) ficou só para o daemon do PC, que é software confiável do usuário.
+            val b = chain.request().newBuilder()
             if (sessionToken.isNotEmpty()) b.header("x-ubika-session", sessionToken)
             chain.proceed(b.build())
         }
@@ -95,7 +97,8 @@ object UbikaApi {
                     // Protege contra null usando .orEmpty() e normaliza cada Game
                     val seguro = CatalogResponse(
                         resp?.games.orEmpty().map(::sanitizeGame),
-                        resp?.isLastPage ?: true
+                        resp?.isLastPage ?: true,
+                        resp?.total ?: 0
                     )
                     Log.d(TAG, "catalogo: ${seguro.games.size} jogos, last=${seguro.isLastPage}")
                     seguro
@@ -124,7 +127,8 @@ object UbikaApi {
                 GameVersion(
                     source = v?.source ?: "",
                     size = v?.size ?: "",
-                    magnet = v?.magnet ?: ""
+                    magnet = v?.magnet ?: "",
+                    links = v?.links ?: emptyList()
                 )
             }
         )
@@ -229,7 +233,9 @@ object UbikaApi {
                     token = sessionToken,
                     userId = o?.get("userId")?.asString ?: "",
                     email = o?.get("email")?.asString ?: "",
-                    plan = o?.get("plan")?.asString ?: ""
+                    plan = o?.get("plan")?.asString ?: "",
+                    effectivePlan = o?.get("effectivePlan")?.asString ?: o?.get("plan")?.asString ?: "",
+                    planExpiresAt = o?.get("planExpiresAt")?.asLong ?: 0L
                 )
             }
         } catch (e: Exception) { AuthResult(error = e.message) }
@@ -280,7 +286,8 @@ object UbikaApi {
 // Corrigido para garantir que games é sempre uma lista não nula
 data class CatalogResponse(
     val games: List<Game> = emptyList(),
-    val isLastPage: Boolean = true
+    val isLastPage: Boolean = true,
+    val total: Int = 0
 )
 
 data class PcStatus(
@@ -293,6 +300,8 @@ data class AuthResult(
     val userId: String = "",
     val email: String = "",
     val plan: String = "",
+    val effectivePlan: String = "",
+    val planExpiresAt: Long = 0L,
     val error: String? = null
 )
 

@@ -36,48 +36,54 @@ fun DrawScope.drawDraggingControllerPath(color: Color, stroke: Stroke, progress:
     val w = size.width
     val h = size.height
 
-    // Traço master unificado: desenha a silhueta completa da manete partindo do ponto inicial do "U"
-    // até a ponta exata do gancho que é puxada na animação.
+    // Silhueta limpa de gamepad: ombros arredondados + duas pegas (grips)
     val masterPath = Path().apply {
-        // Início no topo direito do U / ombro direito da manete
-        moveTo(w * 0.70f, h * 0.25f)
-        cubicTo(w * 0.70f, h * 0.12f, w * 0.58f, h * 0.06f, w * 0.50f, h * 0.06f)
-        cubicTo(w * 0.42f, h * 0.06f, w * 0.30f, h * 0.12f, w * 0.30f, h * 0.25f)
-
-        // Desce pelo lado direito até o grip direito
-        cubicTo(w * 0.08f, h * 0.28f, w * 0.08f, h * 0.52f, w * 0.24f, h * 0.78f)
-
-        // Base inferior e curva interna
-        cubicTo(w * 0.26f, h * 0.76f, w * 0.28f, h * 0.70f, w * 0.26f, h * 0.68f)
-        cubicTo(w * 0.22f, h * 0.65f, w * 0.18f, h * 0.72f, w * 0.20f, h * 0.78f)
-
-        // Puxando o grip esquerdo e a perna final que faz o gancho da imagem
-        cubicTo(w * 0.24f, h * 0.88f, w * 0.40f, h * 0.92f, w * 0.44f, h * 0.78f)
-        cubicTo(w * 0.46f, h * 0.70f, w * 0.54f, h * 0.70f, w * 0.56f, h * 0.78f)
-        cubicTo(w * 0.60f, h * 0.92f, w * 0.76f, h * 0.88f, w * 0.82f, h * 0.72f)
-        cubicTo(w * 0.95f, h * 0.52f, w * 0.92f, h * 0.28f, w * 0.70f, h * 0.25f)
+        // Ombro direito → topo → ombro esquerdo
+        moveTo(w * 0.72f, h * 0.22f)
+        cubicTo(w * 0.72f, h * 0.08f, w * 0.60f, h * 0.04f, w * 0.50f, h * 0.04f)
+        cubicTo(w * 0.40f, h * 0.04f, w * 0.28f, h * 0.08f, w * 0.28f, h * 0.22f)
+        // Lateral esquerda descendo até a pega
+        cubicTo(w * 0.10f, h * 0.26f, w * 0.06f, h * 0.50f, w * 0.12f, h * 0.72f)
+        // Pega esquerda (contorno interno voltando)
+        cubicTo(w * 0.16f, h * 0.90f, w * 0.30f, h * 0.94f, w * 0.34f, h * 0.80f)
+        cubicTo(w * 0.36f, h * 0.72f, w * 0.38f, h * 0.66f, w * 0.44f, h * 0.64f)
+        // Base central → pega direita
+        cubicTo(w * 0.56f, h * 0.64f, w * 0.64f, h * 0.72f, w * 0.66f, h * 0.80f)
+        cubicTo(w * 0.70f, h * 0.94f, w * 0.84f, h * 0.90f, w * 0.88f, h * 0.72f)
+        // Lateral direita subindo e fechando no ombro
+        cubicTo(w * 0.94f, h * 0.50f, w * 0.90f, h * 0.26f, w * 0.72f, h * 0.22f)
     }
 
     val pm = PathMeasure()
     pm.setPath(masterPath, false)
     val totalLength = pm.length
 
-    // Corta o traço exatamente na porcentagem do progresso (fazendo a ponta ser "arrastada" na tela)
     val currentLength = totalLength * progress.coerceIn(0.01f, 1f)
     val animatedPath = Path()
     pm.getSegment(0f, currentLength, animatedPath, true)
 
-    // Desenha o traço em movimento fluido
     drawPath(path = animatedPath, color = color, style = stroke)
 
-    // O botão central (home/touchpad) só surge quando a perna da manete estiver quase totalmente formada
-    if (progress > 0.85f) {
-        val circleAlpha = ((progress - 0.85f) / 0.15f).coerceIn(0f, 1f)
-        drawCircle(
-            color = color.copy(alpha = circleAlpha),
-            radius = w * 0.045f,
-            center = Offset(w * 0.50f, h * 0.20f),
-            style = stroke
-        )
+    // Detalhes só surgem quando o contorno está quase completo
+    if (progress > 0.5f) {
+        val detailAlpha = ((progress - 0.5f) / 0.4f).coerceIn(0f, 1f)
+        val c = color.copy(alpha = detailAlpha)
+
+        // "U" central — detalhe da logo dentro da manete
+        val uPath = Path().apply {
+            moveTo(w * 0.44f, h * 0.22f)
+            lineTo(w * 0.44f, h * 0.38f)
+            cubicTo(w * 0.44f, h * 0.47f, w * 0.56f, h * 0.47f, w * 0.56f, h * 0.38f)
+            lineTo(w * 0.56f, h * 0.22f)
+        }
+        drawPath(uPath, c, style = stroke)
+
+        // D-pad esquerdo (cruz pequena)
+        drawLine(c, Offset(w * 0.30f, h * 0.34f), Offset(w * 0.30f, h * 0.46f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+        drawLine(c, Offset(w * 0.25f, h * 0.40f), Offset(w * 0.35f, h * 0.40f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+
+        // Botões direitos (2 pontos)
+        drawCircle(c, radius = w * 0.028f, center = Offset(w * 0.67f, h * 0.37f), style = stroke)
+        drawCircle(c, radius = w * 0.028f, center = Offset(w * 0.74f, h * 0.43f), style = stroke)
     }
 }
