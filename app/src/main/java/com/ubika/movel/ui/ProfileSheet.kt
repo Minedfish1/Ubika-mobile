@@ -52,6 +52,7 @@ fun ProfileSheet(
     avatarPath: String,
     avatarUrl: String,
     userName: String,
+    email: String,
     onAvatar: (String) -> Unit,
     onName: (String) -> Unit,
     plan: String,
@@ -98,6 +99,10 @@ fun ProfileSheet(
                 AvatarImage(avatarPath, avatarUrl, Modifier.fillMaxSize())
             }
             Text("Toque na foto para trocar", color = Color.Gray, fontSize = 11.sp)
+            // Conta do usuário
+            if (email.isNotBlank()) {
+                Text(email, color = Color(0xFF8a7fa8), fontSize = 12.sp)
+            }
 
             // Nome de exibição — salva no servidor
             androidx.compose.material3.OutlinedTextField(
@@ -131,9 +136,6 @@ fun ProfileSheet(
             nameMsg?.let { Text(it, color = if (it.endsWith("✓")) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 11.sp) }
 
             PlanRow(plan, planExpiresAt)
-
-            // Parear PC de dentro do app — mesmo código do painel do UbikaPC.exe
-            PairRow(soundManager)
 
             if (plan == "expired" || plan == "trial") {
                 UbikaSheetButton(if (renewBusy) "ABRINDO…" else "RENOVAR / ASSINAR PRO — R$ 19,90") {
@@ -188,72 +190,6 @@ private fun fmtDate(ms: Long): String {
     val d = java.util.Date(ms)
     val f = java.text.SimpleDateFormat("dd/MM", java.util.Locale("pt", "BR"))
     return f.format(d)
-}
-
-/** Pareamento dentro do app: digita o código que o PC mostra no painel. */
-@Composable
-private fun PairRow(soundManager: SoundManager) {
-    var code by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var msg by remember { mutableStateOf<String?>(null) }
-    var ok by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("PAREAR PC", color = Color(0xFFB39DDB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            androidx.compose.material3.OutlinedTextField(
-                value = code,
-                onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) code = it },
-                placeholder = { Text("000000", color = Color.DarkGray) },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword
-                ),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF7C4DFF), unfocusedBorderColor = Color(0xFF512DA8),
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF1E0D33), unfocusedContainerColor = Color(0xFF1E0D33)
-                ),
-                modifier = Modifier.weight(1f).height(52.dp)
-            )
-            Box(
-                modifier = Modifier
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (code.length == 6 && !busy) Color(0xFF7C4DFF) else Color(0xFF2A1A3E))
-                    .clickable(enabled = code.length == 6 && !busy) {
-                        soundManager.playClickA()
-                        busy = true; msg = null
-                        scope.launch {
-                            try {
-                                val r = UbikaApi.pairPc(code)
-                                ok = r.bool("ok")
-                                msg = if (ok) "PC pareado: ${r.str("deviceId") ?: "PC"}"
-                                      else r.str("error") ?: "Falha no pareamento"
-                            } catch (e: Exception) {
-                                ok = false
-                                msg = when {
-                                    e.message?.contains("CODIGO") == true -> "Código inválido ou expirado."
-                                    e.message?.contains("DESCONECTOU") == true -> "O PC desconectou."
-                                    else -> e.message
-                                }
-                            } finally { busy = false }
-                        }
-                    }
-                    .padding(horizontal = 18.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(if (busy) "…" else "PAREAR", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
-            }
-        }
-        msg?.let {
-            Text(it, color = if (ok) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        }
-    }
 }
 
 /** Avatar: arquivo local > URL do servidor > placeholder "U". */

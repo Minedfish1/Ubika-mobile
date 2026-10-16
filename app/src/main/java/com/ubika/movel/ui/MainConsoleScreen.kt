@@ -68,6 +68,7 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
     var avatarPath by remember { mutableStateOf(prefs.getString("avatar_path", "") ?: "") }
     var avatarUrl by remember { mutableStateOf("") }
     var userName by remember { mutableStateOf(prefs.getString("user_name", "") ?: "") }
+    var userEmail by remember { mutableStateOf(prefs.getString("user_email", "") ?: "") }
     var plan by remember { mutableStateOf("") }
     var planExpiresAt by remember { mutableStateOf(0L) }
     var renewSid by remember { mutableStateOf<String?>(null) }
@@ -81,6 +82,7 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
         val me = UbikaApi.getMe()
         if (me.effectivePlan.isNotEmpty()) { plan = me.effectivePlan; planExpiresAt = me.planExpiresAt }
         if (me.name.isNotEmpty()) { userName = me.name; prefs.edit().putString("user_name", me.name).apply() }
+        if (me.email.isNotEmpty()) { userEmail = me.email; prefs.edit().putString("user_email", me.email).apply() }
         if (me.avatarUrl.isNotEmpty()) avatarUrl = "${me.avatarUrl}?v=${System.currentTimeMillis() / 60000}"
         while (true) { delay(1000); currentTime = LocalTime.now() }
     }
@@ -257,6 +259,7 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
                 avatarPath = avatarPath,
                 avatarUrl = avatarUrl,
                 userName = userName,
+                email = userEmail,
                 onAvatar = { path -> avatarPath = path; prefs.edit().putString("avatar_path", path).apply() },
                 onName = { n -> userName = n; prefs.edit().putString("user_name", n).apply() },
                 plan = plan,
