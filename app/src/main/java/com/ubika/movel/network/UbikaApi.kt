@@ -56,8 +56,9 @@ object UbikaApi {
         return "HTTP $code${motivo?.let { ": $it" } ?: ""}"
     }
 
-    suspend fun getTrendingGames(): List<Game> = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(buildUrl("trending")).build()
+    suspend fun getTrendingGames(genre: String = ""): List<Game> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(buildUrl(if (genre.isBlank()) "trending" else "trending?genre=$genre")).build()
         try {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string()

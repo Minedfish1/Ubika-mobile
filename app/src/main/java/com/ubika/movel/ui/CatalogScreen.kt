@@ -69,6 +69,25 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
         try { trending = UbikaApi.getTrendingGames() } catch (_: Exception) {}
     }
 
+    // Prateleiras por categoria: mais jogados da semana por gênero
+    val genreRows = listOf(
+        "action" to "AÇÃO",
+        "horror" to "TERROR",
+        "adventure" to "AVENTURA",
+        "rpg" to "RPG",
+        "shooter" to "TIRO",
+        "racing" to "CORRIDA",
+    )
+    var genreGames by remember { mutableStateOf<Map<String, List<Game>>>(emptyMap()) }
+    LaunchedEffect(Unit) {
+        genreRows.forEach { (key, _) ->
+            try {
+                val g = UbikaApi.getTrendingGames(key)
+                if (g.isNotEmpty()) genreGames = genreGames + (key to g)
+            } catch (_: Exception) {}
+        }
+    }
+
     // Monitor de rolagem
     val listState = rememberLazyListState()
 
@@ -174,6 +193,28 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                     Spacer(modifier = Modifier.height(12.dp))
                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                         itemsIndexed(trending.drop(3)) { index, game ->
+                                            AnimatedEntry(index) {
+                                                Column(modifier = Modifier.width(110.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
+                                                    GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)))
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    Text(game.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // --- Prateleiras por gênero: AÇÃO, TERROR, AVENTURA… ---
+                        genreRows.forEach { (genreKey, genreLabel) ->
+                            val gg = genreGames[genreKey] ?: return@forEach
+                            if (gg.isEmpty()) return@forEach
+                            item {
+                                Column {
+                                    Text("$genreLabel EM ALTA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        itemsIndexed(gg) { index, game ->
                                             AnimatedEntry(index) {
                                                 Column(modifier = Modifier.width(110.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
                                                     GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)))
