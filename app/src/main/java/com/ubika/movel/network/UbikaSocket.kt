@@ -22,7 +22,12 @@ object UbikaSocket {
 
     fun connect(userId: String = "") {
         if (userId.isNotEmpty()) this.userId = userId
-        if (mSocket != null && (mSocket?.connected() == true)) return
+        if (mSocket?.connected() == true) return
+        // Socket morto/meio-aberto (app voltou do background, queda de rede):
+        // descarta o objeto velho senão os listeners duplicam na reconexão
+        mSocket?.off()
+        mSocket?.disconnect()
+        mSocket = null
         try {
             val opts = IO.Options().apply {
                 query = "device=android&userId=${this@UbikaSocket.userId}"

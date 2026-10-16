@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +38,8 @@ import com.ubika.movel.network.UbikaSocket
 import com.ubika.movel.utils.GamepadManager
 import com.ubika.movel.utils.SoundManager
 import com.ubika.movel.utils.rememberPadType
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
@@ -64,6 +67,19 @@ fun MainConsoleScreen() {
         UbikaSocket.connect(UbikaApi.userId)
         realDeviceRes(context)?.let { (w, h, fps) -> UbikaSocket.setClientResolution(w, h, fps) }
         while (true) { delay(1000); currentTime = LocalTime.now() }
+    }
+
+    // App sai do background → socket morreu → reconecta e reanuncia resolução
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                UbikaSocket.connect(UbikaApi.userId)
+                UbikaSocket.announceClient()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
