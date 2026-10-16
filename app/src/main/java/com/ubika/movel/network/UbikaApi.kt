@@ -6,6 +6,7 @@ import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import com.ubika.movel.BuildConfig
 import com.ubika.movel.model.Game
+import com.ubika.movel.model.GameVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -62,7 +63,8 @@ object UbikaApi {
                 else root.asJsonObject.getAsJsonArray("games")
 
                 val type = object : TypeToken<List<Game>>() {}.type
-                val lista: List<Game> = gson.fromJson(array, type) ?: emptyList()
+                val lista: List<Game> = (gson.fromJson(array, type) ?: emptyList<Game>())
+                    .map(::sanitizeGame)
                 Log.d(TAG, "trending: ${lista.size} jogos")
                 lista
             }
@@ -84,8 +86,11 @@ object UbikaApi {
                     if (body.isNullOrBlank()) throw Exception("Corpo vazio")
 
                     val resp = gson.fromJson(body, CatalogResponse::class.java)
-                    // Protege contra null usando .orEmpty()
-                    val seguro = CatalogResponse(resp?.games.orEmpty(), resp?.isLastPage ?: true)
+                    // Protege contra null usando .orEmpty() e normaliza cada Game
+                    val seguro = CatalogResponse(
+                        resp?.games.orEmpty().map(::sanitizeGame),
+                        resp?.isLastPage ?: true
+                    )
                     Log.d(TAG, "catalogo: ${seguro.games.size} jogos, last=${seguro.isLastPage}")
                     seguro
                 }
@@ -94,6 +99,30 @@ object UbikaApi {
                 throw e
             }
         }
+
+    /**
+     * Gson ignora a null-safety do Kotlin: campos declarados non-null chegam
+     * null quando o JSON omite o campo (ex.: coverUrl) e estouram NPE no
+     * hashCode/equals do data class. Normaliza tudo na fronteira.
+     */
+    @Suppress("USELESS_ELVIS")
+    private fun sanitizeGame(g: Game?): Game {
+        if (g == null) return Game("", "", "", "", versions = emptyList())
+        return Game(
+            id = g.id ?: "",
+            title = g.title ?: "",
+            coverUrl = g.coverUrl ?: "",
+            description = g.description ?: "",
+            requirements = g.requirements ?: "• SO: Windows 10/11\n• RAM: 8/16 GB\n• DirectX 12\n• GPU Dedicada",
+            versions = (g.versions ?: emptyList()).map { v ->
+                GameVersion(
+                    source = v?.source ?: "",
+                    size = v?.size ?: "",
+                    magnet = v?.magnet ?: ""
+                )
+            }
+        )
+    }
 
     /** Status do PC host visto pelo relay: { online, streamHost }. */
     suspend fun getPcStatus(): PcStatus = withContext(Dispatchers.IO) {
