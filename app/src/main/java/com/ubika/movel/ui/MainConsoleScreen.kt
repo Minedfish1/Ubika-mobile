@@ -1,5 +1,8 @@
 package com.ubika.movel.ui
 
+import android.content.Context
+import android.util.DisplayMetrics
+import android.view.WindowManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -59,6 +62,7 @@ fun MainConsoleScreen() {
 
     LaunchedEffect(Unit) {
         UbikaSocket.connect(UbikaApi.userId)
+        realDeviceRes(context)?.let { (w, h, fps) -> UbikaSocket.setClientResolution(w, h, fps) }
         while (true) { delay(1000); currentTime = LocalTime.now() }
     }
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -268,5 +272,24 @@ fun ActionPrompt(iconLabel: String, actionText: String) {
             Text(text = iconLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
         }
         Text(text = actionText, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Resolução física real do aparelho em paisagem (maior lado primeiro) + refresh rate. */
+@Suppress("DEPRECATION")
+private fun realDeviceRes(context: Context): Triple<Int, Int, Int>? {
+    return try {
+        val display = context.display // API 30+
+        if (display != null) {
+            val m = display.mode
+            Triple(maxOf(m.physicalWidth, m.physicalHeight), minOf(m.physicalWidth, m.physicalHeight), m.refreshRate.toInt())
+        } else null
+    } catch (e: Exception) {
+        try {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val dm = DisplayMetrics()
+            wm.defaultDisplay.getRealMetrics(dm)
+            Triple(maxOf(dm.widthPixels, dm.heightPixels), minOf(dm.widthPixels, dm.heightPixels), wm.defaultDisplay.refreshRate.toInt())
+        } catch (e2: Exception) { null }
     }
 }

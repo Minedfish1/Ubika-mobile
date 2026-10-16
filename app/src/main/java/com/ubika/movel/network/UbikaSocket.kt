@@ -15,6 +15,7 @@ object UbikaSocket {
     private var mSocket: Socket? = null
     private var progressListener: ((JSONObject) -> Unit)? = null
     private var userId: String = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" }
+    private var clientRes: Triple<Int, Int, Int>? = null // width, height, fps do aparelho
 
     val isConnected: Boolean
         get() = mSocket?.connected() == true
@@ -34,9 +35,17 @@ object UbikaSocket {
                 }
             }
             mSocket = IO.socket(SERVER_URL, opts)
-            mSocket?.on(Socket.EVENT_CONNECT) { Log.d(TAG, "conectado: ${mSocket?.id()}") }
+            mSocket?.on(Socket.EVENT_CONNECT) {
+                Log.d(TAG, "conectado: ${mSocket?.id()}")
+                announceClient() // primeira ação: PC fica sabendo a resolução exata
+            }
             mSocket?.on(Socket.EVENT_CONNECT_ERROR) { a -> Log.e(TAG, "connect_error: ${a.firstOrNull()}") }
             mSocket?.on(Socket.EVENT_DISCONNECT) { a -> Log.d(TAG, "disconnect: ${a.firstOrNull()}") }
+            // PC apareceu → reanuncia a resolução (ele pode ter trocado de sessão)
+            mSocket?.on("pc_status") { args ->
+                val obj = args.firstOrNull() as? JSONObject ?: return@on
+                if (obj.optBoolean("online")) announceClient()
+            }
             // Reaplica listener registrado antes do socket existir/reconectar
             progressListener?.let { l ->
                 mSocket?.on("download_progress") { args ->
@@ -105,6 +114,29 @@ object UbikaSocket {
         sendCommand(payload) { ok, _, _ -> onResult?.invoke(ok) }
     }
 
+    /** Guarda a resolução real do aparelho (chame uma vez com os metrics reais). */
+    fun setClientResolution(width: Int, height: Int, fps: Int) {
+        clientRes = Triple(width, height, fps)
+        announceClient()
+    }
+
+    /** Envia ao PC a resolução exata do celular — display virtual acompanha. */
+    fun announceClient() {
+        val (w, h, fps) = clientRes ?: return
+        if (mSocket?.connected() != true) return
+        val payload = JSONObject()
+            .put("action", "preparar_stream")
+            .put("width", w).put("height", h).put("fps", fps)
+        sendCommand(payload) { ok, err, _ ->
+            Log.d(TAG, "preparar_stream ${w}x${h}@${fps} ok=$ok err=$err")
+        }
+    }
+
+    /** Pede ao PC para voltar o display ao normal (se não houver stream). */
+    fun restoreDisplay() {
+        sendCommand(JSONObject().put("action", "restaurar_display"))
+    }
+
     /** Registra listener de progresso vindo do PC (evento `download_progress`). */
     fun setDownloadProgressListener(listener: ((JSONObject) -> Unit)?) {
         progressListener = listener
@@ -117,6 +149,7 @@ object UbikaSocket {
     }
 
     fun disconnect() {
+        restoreDisplay()
         mSocket?.off()
         mSocket?.disconnect()
         mSocket = null
