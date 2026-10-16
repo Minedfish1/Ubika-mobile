@@ -244,7 +244,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                             onClick = {
                                                 selectedVersion?.let { ver ->
                                                     soundManager.playClickA()
-                                                    coroutineScope.launch { UbikaSocket.sendCommand("INSTALL:${game.title}|${ver.magnet}") }
+                                                    coroutineScope.launch { UbikaSocket.sendInstallCommand(game.title, ver.magnet) }
                                                     expandedGame = null
                                                 }
                                             },

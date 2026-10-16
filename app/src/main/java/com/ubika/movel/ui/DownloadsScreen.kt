@@ -2,6 +2,7 @@ package com.ubika.movel.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,21 +15,84 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ubika.movel.network.UbikaSocket
 import com.ubika.movel.utils.SoundManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 data class DownloadItem(
+    val id: String,
     val gameName: String,
     var progress: Float, // 0.0 a 100.0
-    var speed: String
+    var speed: String,
+    var state: String,
+    var peers: Int = 0
 )
+
+private fun JSONObject.toDownloadItem(existing: DownloadItem? = null): DownloadItem {
+    val downSpeed = optLong("downSpeed", 0)
+    val speedStr = when {
+        downSpeed >= 1_000_000 -> "%.1f MB/s".format(downSpeed / 1_000_000f)
+        downSpeed >= 1_000 -> "%.0f KB/s".format(downSpeed / 1_000f)
+        else -> "0 KB/s"
+    }
+    return DownloadItem(
+        id = optString("id", existing?.id ?: ""),
+        gameName = optString("gameName", existing?.gameName ?: "download"),
+        progress = optDouble("progress", 0.0).toFloat(),
+        speed = speedStr,
+        state = optString("state", existing?.state ?: "downloading"),
+        peers = optInt("peers", existing?.peers ?: 0)
+    )
+}
+
+private fun stateLabel(state: String) = when (state) {
+    "fetching-metadata" -> "Buscando metadados..."
+    "downloading" -> "Baixando"
+    "paused" -> "Pausado"
+    "finished" -> "Concluído"
+    "error" -> "Erro"
+    "removed" -> "Removido"
+    else -> state
+}
 
 @Composable
 fun DownloadsScreen(soundManager: SoundManager) {
-    // Lista reativa de downloads ativos no PC
-    var activeDownloads = remember { mutableStateListOf<DownloadItem>() }
+    val activeDownloads = remember { mutableStateListOf<DownloadItem>() }
+    val scope = rememberCoroutineScope()
 
-    // Aqui escutaria os eventos de progresso vindos do socket da AWS
-    // Ex: UbikaSocket.onProgressUpdate { name, prog, speed -> ... }
+    fun upsert(json: JSONObject) {
+        val id = json.optString("id")
+        if (id.isBlank()) return
+        val idx = activeDownloads.indexOfFirst { it.id == id }
+        val item = json.toDownloadItem(activeDownloads.getOrNull(idx))
+        if (item.state == "removed") {
+            if (idx >= 0) activeDownloads.removeAt(idx)
+        } else if (idx >= 0) {
+            activeDownloads[idx] = item
+        } else {
+            activeDownloads.add(item)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        // Escuta progresso vindo do PC via VPS
+        UbikaSocket.setDownloadProgressListener { json ->
+            scope.launch(Dispatchers.Main) { upsert(json) }
+        }
+        // Pede o estado atual ao conectar na tela
+        UbikaSocket.requestDownloads { ok, resp ->
+            val arr = resp?.optJSONArray("downloads")
+            if (ok && arr != null) {
+                scope.launch(Dispatchers.Main) {
+                    for (i in 0 until arr.length()) upsert(arr.getJSONObject(i))
+                }
+            }
+        }
+        onDispose { UbikaSocket.setDownloadProgressListener(null) }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(marbledBackground).padding(24.dp)) {
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -40,7 +104,7 @@ fun DownloadsScreen(soundManager: SoundManager) {
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(activeDownloads) { download ->
+                    items(activeDownloads, key = { it.id }) { download ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -60,11 +124,37 @@ fun DownloadsScreen(soundManager: SoundManager) {
                                 LinearProgressIndicator(
                                     progress = { download.progress / 100f },
                                     modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    color = Color(0xFF7C4DFF),
+                                    color = if (download.state == "finished") Color(0xFF00C853) else Color(0xFF7C4DFF),
                                     trackColor = Color(0xFF1E0D33)
                                 )
 
-                                Text("${download.progress}% concluído", color = Color(0xFFB39DDB), fontSize = 11.sp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "${stateLabel(download.state)} — ${download.progress}% • ${download.peers} peers",
+                                        color = Color(0xFFB39DDB), fontSize = 11.sp
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (download.state == "downloading" || download.state == "fetching-metadata") {
+                                            DownloadAction("PAUSAR") {
+                                                UbikaSocket.downloadAction("pausar_download", download.id)
+                                            }
+                                        }
+                                        if (download.state == "paused") {
+                                            DownloadAction("RETOMAR") {
+                                                UbikaSocket.downloadAction("retomar_download", download.id)
+                                            }
+                                        }
+                                        if (download.state == "paused" || download.state == "finished" || download.state == "error") {
+                                            DownloadAction("REMOVER") {
+                                                UbikaSocket.downloadAction("remover_download", download.id)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -72,4 +162,18 @@ fun DownloadsScreen(soundManager: SoundManager) {
             }
         }
     }
+}
+
+@Composable
+private fun DownloadAction(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = Color(0xFFB39DDB),
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .border(1.dp, Color(0xFF512DA8), RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    )
 }

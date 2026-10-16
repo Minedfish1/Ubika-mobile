@@ -1,7 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// Segredos ficam em local.properties (gitignored):
+//   UBIKA_SERVER=http://18.223.108.137:3000
+//   UBIKA_SHARED_SECRET=...
+//   UBIKA_USER_ID=...
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun localProp(key: String) = localProps.getProperty(key) ?: ""
 
 android {
     namespace = "com.ubika.movel"
@@ -15,6 +27,10 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "UBIKA_SERVER", "\"${localProp("UBIKA_SERVER")}\"")
+        buildConfigField("String", "UBIKA_SHARED_SECRET", "\"${localProp("UBIKA_SHARED_SECRET")}\"")
+        buildConfigField("String", "UBIKA_USER_ID", "\"${localProp("UBIKA_USER_ID")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -33,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

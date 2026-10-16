@@ -82,6 +82,7 @@ fun MainConsoleScreen() {
 
                     DrawerItem("Biblioteca", Icons.Default.LibraryBooks, currentScreen) { currentScreen = "Biblioteca"; scope.launch { drawerState.close() }; soundManager.playClickA() }
                     DrawerItem("Catálogo", Icons.Default.Store, currentScreen) { currentScreen = "Catálogo"; scope.launch { drawerState.close() }; soundManager.playClickA() }
+                    DrawerItem("Downloads", Icons.Default.Download, currentScreen) { currentScreen = "Downloads"; scope.launch { drawerState.close() }; soundManager.playClickA() }
                 }
             }
         ) {
@@ -138,6 +139,7 @@ fun MainConsoleScreen() {
                         when (targetScreen) {
                             "Biblioteca" -> LibraryHubContent(soundManager, onGameSelected = { game -> selectedGameForDetail = game })
                             "Catálogo" -> CatalogScreen(soundManager, globalSearchQuery)
+                            "Downloads" -> DownloadsScreen(soundManager)
                         }
                     }
                 }

@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
+import com.ubika.movel.BuildConfig
 import com.ubika.movel.model.Game
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,12 +16,17 @@ import java.util.concurrent.TimeUnit
 
 object UbikaApi {
     private const val TAG = "UbikaApi"
-    private const val BASE_URL = "http://18.223.108.137:3000/api"
-    private const val USER_ID = "utilizador_teste_123" // tem de ser igual ao do client.js
+    private val BASE_URL = (BuildConfig.UBIKA_SERVER.ifEmpty { "http://18.223.108.137:3000" }) + "/api"
+    private val USER_ID = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" } // tem de ser igual ao do client.js
+    private val SHARED_SECRET = BuildConfig.UBIKA_SHARED_SECRET
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS) // maior que os 20s de espera da AWS pelo PC
+        .addInterceptor { chain ->
+            chain.proceed(chain.request().newBuilder()
+                .header("x-ubika-token", SHARED_SECRET).build())
+        }
         .addInterceptor(HttpLoggingInterceptor { Log.d("UbikaHTTP", it) }
             .apply { level = HttpLoggingInterceptor.Level.BODY })
         .build()
