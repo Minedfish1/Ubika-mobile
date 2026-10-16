@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -145,12 +144,8 @@ fun SplashScreen(onFinished: () -> Unit) {
 
             // Fagulha na ponta dos traços enquanto desenham
             if (padDraw in 0.02f..0.98f) {
-                val tipR = FloatArray(2)
-                pmR.getPosTan(pmR.length * padDraw, tipR, FloatArray(2))
-                val tipL = FloatArray(2)
-                pmL.getPosTan(pmL.length * padDraw, tipL, FloatArray(2))
-                drawCircle(Color.White, radius = 3.dp.toPx(), center = Offset(tipR[0], tipR[1]))
-                drawCircle(Color.White, radius = 3.dp.toPx(), center = Offset(tipL[0], tipL[1]))
+                drawCircle(Color.White, radius = 3.dp.toPx(), center = pmR.getPosition(pmR.length * padDraw))
+                drawCircle(Color.White, radius = 3.dp.toPx(), center = pmL.getPosition(pmL.length * padDraw))
             }
         }
 
