@@ -9,8 +9,10 @@ import com.ubika.movel.model.Game
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
@@ -94,8 +96,59 @@ object UbikaApi {
         }
 }
 
+    /** Status do PC host visto pelo relay: { online, streamHost }. */
+    suspend fun getPcStatus(): PcStatus = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(buildUrl("pc/status")).build()
+        try {
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string()
+                if (!response.isSuccessful || body.isNullOrBlank()) return@use PcStatus()
+                val o = JsonParser.parseString(body).asJsonObject
+                PcStatus(
+                    online = o.get("online")?.asBoolean == true,
+                    streamHost = o.get("streamHost")?.asString ?: ""
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getPcStatus falhou: ${e.message}")
+            PcStatus()
+        }
+    }
+
+    /** POST /api/pc/command — retorna o JSON de resposta do PC ou lança exceção. */
+    suspend fun sendPcCommand(action: String, payload: Map<String, Any> = emptyMap()): JsonObjectHolder =
+        withContext(Dispatchers.IO) {
+            val json = com.google.gson.JsonObject().apply {
+                addProperty("userId", USER_ID)
+                addProperty("action", action)
+                if (payload.isNotEmpty()) add("payload", gson.toJsonTree(payload))
+            }
+            val body = json.toString()
+                .toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url(buildUrl("pc/command")).post(body).build()
+
+            client.newCall(request).execute().use { response ->
+                val respBody = response.body?.string()
+                if (!response.isSuccessful) throw Exception(errorMessage(response.code, respBody))
+                JsonObjectHolder(respBody ?: "{}")
+            }
+        }
+}
+
 // Corrigido para garantir que games é sempre uma lista não nula
 data class CatalogResponse(
     val games: List<Game> = emptyList(),
     val isLastPage: Boolean = true
 )
+
+data class PcStatus(
+    val online: Boolean = false,
+    val streamHost: String = ""
+)
+
+/** JSON bruto de resposta do PC — a tela extrai os campos que precisar. */
+data class JsonObjectHolder(val raw: String) {
+    val obj get() = try { JsonParser.parseString(raw).asJsonObject } catch (e: Exception) { null }
+    fun str(key: String) = obj?.get(key)?.let { if (it.isJsonPrimitive) it.asString else it.toString() }
+    fun bool(key: String) = obj?.get(key)?.asBoolean == true
+}

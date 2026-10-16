@@ -29,7 +29,9 @@ import coil.compose.AsyncImage
 import com.ubika.movel.model.Game
 import com.ubika.movel.network.UbikaApi
 import com.ubika.movel.network.UbikaSocket
+import com.ubika.movel.utils.GamepadManager
 import com.ubika.movel.utils.SoundManager
+import com.ubika.movel.utils.rememberPadType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
@@ -49,6 +51,9 @@ fun MainConsoleScreen() {
     var isSearchActive by remember { mutableStateOf(false) }
     var globalSearchQuery by remember { mutableStateOf("") }
     var selectedGameForDetail by remember { mutableStateOf<Game?>(null) }
+
+    val padType by rememberPadType()
+    val glyphs = GamepadManager.glyphsFor(padType)
 
     LaunchedEffect(Unit) {
         UbikaSocket.connect()
@@ -83,6 +88,7 @@ fun MainConsoleScreen() {
                     DrawerItem("Biblioteca", Icons.Default.LibraryBooks, currentScreen) { currentScreen = "Biblioteca"; scope.launch { drawerState.close() }; soundManager.playClickA() }
                     DrawerItem("Catálogo", Icons.Default.Store, currentScreen) { currentScreen = "Catálogo"; scope.launch { drawerState.close() }; soundManager.playClickA() }
                     DrawerItem("Downloads", Icons.Default.Download, currentScreen) { currentScreen = "Downloads"; scope.launch { drawerState.close() }; soundManager.playClickA() }
+                    DrawerItem("Stream", Icons.Default.SportsEsports, currentScreen) { currentScreen = "Stream"; scope.launch { drawerState.close() }; soundManager.playClickA() }
                 }
             }
         ) {
@@ -140,6 +146,7 @@ fun MainConsoleScreen() {
                             "Biblioteca" -> LibraryHubContent(soundManager, onGameSelected = { game -> selectedGameForDetail = game })
                             "Catálogo" -> CatalogScreen(soundManager, globalSearchQuery)
                             "Downloads" -> DownloadsScreen(soundManager)
+                            "Stream" -> StreamScreen(soundManager)
                         }
                     }
                 }
@@ -152,9 +159,9 @@ fun MainConsoleScreen() {
                         Text("MENU", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        ActionPrompt("≡", "OPÇÕES")
-                        ActionPrompt("A", "JOGAR")
-                        ActionPrompt("B", "VOLTAR")
+                        ActionPrompt(glyphs.menu, "OPÇÕES")
+                        ActionPrompt(glyphs.confirm, "JOGAR")
+                        ActionPrompt(glyphs.cancel, "VOLTAR")
                     }
                 }
             }
