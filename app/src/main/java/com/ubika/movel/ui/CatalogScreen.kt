@@ -21,18 +21,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.ubika.movel.model.Game
 import com.ubika.movel.model.GameVersion
 import com.ubika.movel.network.UbikaApi
-import com.ubika.movel.network.UbikaSocket
 import com.ubika.movel.utils.SoundManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -199,98 +203,138 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
             }
         }
 
-        // --- O RESTO DO CÓDIGO DO MODAL FICA AQUI EXATAMENTE COMO ESTAVA ---
-        // (O código do AnimatedVisibility e do painel expandido mantém-se igual)
+        // Detalhe do jogo — modelo antigo (2 colunas em landscape, feito pra manete):
+        // capa à esquerda | título, descrição, requisitos, fontes e BAIXAR à direita
         AnimatedVisibility(
             visible = expandedGame != null,
-            enter = fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.9f),
-            exit = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.9f)
+            enter = fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.94f),
+            exit = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.94f)
         ) {
             gameToDisplay?.let { game ->
+                val context = LocalContext.current
+                // Auto-seleciona a primeira fonte baixável — A no controle já baixa direto
+                LaunchedEffect(game.id) {
+                    if (selectedVersion == null) {
+                        selectedVersion = game.versionsOrEmpty().firstOrNull {
+                            it.magnetOrEmpty().isNotBlank() || it.linksOrEmpty().isNotEmpty()
+                        }
+                    }
+                }
                 Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable { expandedGame = null },
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.88f)).clickable { expandedGame = null },
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
-                        modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.85f).border(1.dp, Color(0xFF512DA8).copy(alpha = 0.6f), RoundedCornerShape(24.dp)).clickable(enabled = false) {},
-                        shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0510))
+                        modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f).border(1.dp, Color(0xFF512DA8).copy(alpha = 0.6f), RoundedCornerShape(20.dp)).clickable(enabled = false) {},
+                        shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0510))
                     ) {
-                        // Layout de uma coluna — cabe bem no celular: capa → fontes → baixar
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Brush.verticalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510))))
-                                .verticalScroll(rememberScrollState())
-                                .padding(20.dp)
-                        ) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 2, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { expandedGame = null }, contentPadding = PaddingValues(0.dp)) {
-                                    Text("✕", color = Color(0xFFB39DDB), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Row(modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510)))).padding(16.dp)) {
+
+                            // COLUNA ESQUERDA: capa (poster 2:3) — não engole a tela
+                            GameCover(game, Modifier.width(150.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(12.dp)))
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // COLUNA DIREITA: tudo que interessa + baixar
+                            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { soundManager.playClickA(); expandedGame = null }, contentPadding = PaddingValues(0.dp)) {
+                                        Text("✕", color = Color(0xFFB39DDB), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                            }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    // descrição + requisitos (rolagem)
+                                    Column(modifier = Modifier.weight(1.1f).verticalScroll(rememberScrollState())) {
+                                        Text("Sobre", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            game.description.take(400),
+                                            color = Color.White, fontSize = 11.sp, lineHeight = 15.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text("Requisitos", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(game.requirementsOrDefault(), color = Color.Gray, fontSize = 10.sp, lineHeight = 14.sp)
+                                    }
 
-                            GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(12.dp)))
+                                    // fontes (rolagem, foco p/ manete)
+                                    Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                        Text("FONTE", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        game.versionsOrEmpty().forEach { version ->
+                                            val isSelected = selectedVersion == version
+                                            val hasMagnet = version.magnetOrEmpty().isNotBlank()
+                                            var focused by remember { mutableStateOf(false) }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(if (isSelected) Color(0xFF512DA8) else Color(0xFF140822))
+                                                    .border(
+                                                        if (isSelected || focused) 2.dp else 1.dp,
+                                                        if (isSelected) Color(0xFF9575CD) else if (focused) Color(0xFFB39DDB) else Color(0xFF311B52),
+                                                        RoundedCornerShape(8.dp)
+                                                    )
+                                                    .onFocusChanged { focused = it.isFocused }
+                                                    .focusable()
+                                                    .clickable { soundManager.playClickA(); selectedVersion = version }
+                                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(version.source.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                                                    Text(if (hasMagnet) "TORRENT" else "DIRETO", color = Color(0xFFB39DDB), fontSize = 9.sp)
+                                                }
+                                                Text(version.size, color = Color(0xFFD1C4E9), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                            Text("ESCOLHA A FONTE", color = Color(0xFFB39DDB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            game.versionsOrEmpty().forEach { version ->
-                                val isSelected = selectedVersion == version
-                                val hasMagnet = version.magnetOrEmpty().isNotBlank()
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSelected) Color(0xFF512DA8) else Color(0xFF140822))
-                                        .border(1.dp, if (isSelected) Color(0xFF9575CD) else Color(0xFF311B52), RoundedCornerShape(10.dp))
-                                        .clickable { selectedVersion = version }
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                val sel = selectedVersion
+                                var sending by remember { mutableStateOf(false) }
+                                val canDownload = sel != null && !sending && (sel.magnetOrEmpty().isNotBlank() || sel.linksOrEmpty().isNotEmpty())
+                                Button(
+                                    onClick = {
+                                        sel?.let { ver ->
+                                            soundManager.playClickA()
+                                            sending = true
+                                            coroutineScope.launch {
+                                                // HTTP via VPS — chega ao PC mesmo com o socket do app offline
+                                                try {
+                                                    val r = UbikaApi.sendPcCommand("iniciar_download", mapOf(
+                                                        "gameName" to game.title,
+                                                        "magnetLink" to ver.magnetOrEmpty(),
+                                                        "link" to (ver.linksOrEmpty().firstOrNull() ?: "")
+                                                    ))
+                                                    if (r.bool("ok")) {
+                                                        android.widget.Toast.makeText(context, "Download iniciado no PC — veja na aba Downloads", android.widget.Toast.LENGTH_LONG).show()
+                                                        expandedGame = null
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "PC recusou: ${r.str("error") ?: "?"}", android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    android.widget.Toast.makeText(context, "Falha: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                }
+                                                sending = false
+                                            }
+                                        }
+                                    },
+                                    enabled = canDownload,
+                                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF), disabledContainerColor = Color(0xFF1E0D33)),
+                                    shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        // badge da fonte + tipo de download
-                                        Box(
-                                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(if (isSelected) Color(0xFF7C4DFF) else Color(0xFF311B52)).padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(version.source.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                                        }
-                                        Text(if (hasMagnet) "torrent" else "link direto", color = Color(0xFFB39DDB), fontSize = 11.sp)
-                                    }
-                                    Text(version.size, color = Color(0xFFD1C4E9), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (sending) "ENVIANDO AO PC…" else if (sel == null) "SELECIONE UMA FONTE" else "BAIXAR NO PC — ${sel.size}",
+                                        color = if (canDownload) Color.White else Color.Gray,
+                                        fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp
+                                    )
                                 }
-                            }
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            val sel = selectedVersion
-                            val canDownload = sel != null && (sel.magnetOrEmpty().isNotBlank() || sel.linksOrEmpty().isNotEmpty())
-                            Button(
-                                onClick = {
-                                    sel?.let { ver ->
-                                        soundManager.playClickA()
-                                        coroutineScope.launch {
-                                            UbikaSocket.sendInstallCommand(game.title, ver.magnetOrEmpty(), ver.linksOrEmpty().firstOrNull() ?: "")
-                                        }
-                                        expandedGame = null
-                                    }
-                                },
-                                enabled = canDownload,
-                                modifier = Modifier.fillMaxWidth().height(50.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF), disabledContainerColor = Color(0xFF1E0D33)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    if (sel == null) "SELECIONE UMA FONTE" else "BAIXAR NO PC",
-                                    color = if (canDownload) Color.White else Color.Gray,
-                                    fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp
-                                )
                             }
                         }
                     }
@@ -356,10 +400,11 @@ private fun PodiumSlot(game: Game, rank: Int, order: Int, modifier: Modifier, on
     }
 }
 
-/** Capa do jogo; sem URL mostra um bloco gradiente com a inicial — nunca fica cinza. */
+/** Capa do jogo; sem URL ou falha de carga mostra um bloco gradiente com a inicial — nunca cinza. */
 @Composable
 private fun GameCover(game: Game, modifier: Modifier = Modifier) {
-    if (game.coverUrl.isBlank()) {
+    @Composable
+    fun Placeholder() {
         Box(
             modifier = modifier.background(Brush.linearGradient(listOf(Color(0xFF311B52), Color(0xFF140822)))),
             contentAlignment = Alignment.Center
@@ -369,8 +414,22 @@ private fun GameCover(game: Game, modifier: Modifier = Modifier) {
                 color = Color(0xFF7C4DFF), fontSize = 28.sp, fontWeight = FontWeight.Black
             )
         }
-    } else {
-        AsyncImage(model = game.coverUrl, contentDescription = game.title, contentScale = ContentScale.Crop, modifier = modifier)
+    }
+    if (game.coverUrl.isBlank()) { Placeholder(); return }
+    coil.compose.SubcomposeAsyncImage(
+        model = game.coverUrl,
+        contentDescription = game.title,
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+    ) {
+        when (painter.state) {
+            is coil.compose.AsyncImagePainter.State.Error -> Placeholder()
+            is coil.compose.AsyncImagePainter.State.Loading -> Box(
+                modifier = Modifier.fillMaxSize().background(Color(0xFF140822)),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator(color = Color(0xFF7C4DFF), modifier = Modifier.size(22.dp), strokeWidth = 2.dp) }
+            else -> SubcomposeAsyncImageContent()
+        }
     }
 }
 
