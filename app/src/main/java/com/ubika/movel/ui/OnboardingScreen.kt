@@ -207,7 +207,25 @@ private fun PairStep(onDone: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var pairedDevice by remember { mutableStateOf<String?>(null) }
+    var checkingPc by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+
+    // PC já pareado à conta (ou salvo de outra sessão) → entra direto, sem código
+    LaunchedEffect(Unit) {
+        try {
+            val savedPc = ctx.getSharedPreferences("ubika_prefs", 0).getString("paired_device", null)
+            val st = UbikaApi.getPcStatus()
+            if (st.online || savedPc != null) {
+                ctx.getSharedPreferences("ubika_prefs", 0).edit()
+                    .putString("paired_device", savedPc ?: "pc").apply()
+                delay(600)
+                onDone()
+                return@LaunchedEffect
+            }
+        } catch (_: Exception) { }
+        checkingPc = false
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -215,6 +233,10 @@ private fun PairStep(onDone: () -> Unit) {
         modifier = Modifier.padding(32.dp).widthIn(max = 420.dp)
     ) {
         Text("CONECTAR SEU PC", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+        if (checkingPc) {
+            CircularProgressIndicator(color = UbikaPurple, modifier = Modifier.size(28.dp))
+            Text("Verificando seu PC…", color = Color.Gray, fontSize = 13.sp)
+        } else {
         Text(
             "No PC, abra o UbikaPC.exe — o painel mostra o código de 6 dígitos.\nEle troca sozinho a cada ~9 minutos; use sempre o atual.",
             color = Color.Gray, fontSize = 13.sp, textAlign = TextAlign.Center, lineHeight = 19.sp
@@ -246,7 +268,11 @@ private fun PairStep(onDone: () -> Unit) {
                 scope.launch {
                     try {
                         val r = UbikaApi.pairPc(code)
-                        if (r.bool("ok")) pairedDevice = r.str("deviceId") ?: "PC"
+                        if (r.bool("ok")) {
+                            pairedDevice = r.str("deviceId") ?: "PC"
+                            ctx.getSharedPreferences("ubika_prefs", 0).edit()
+                                .putString("paired_device", pairedDevice).apply()
+                        }
                         else error = r.str("error") ?: "Falha no pareamento"
                     } catch (e: Exception) {
                         error = when {
@@ -260,6 +286,7 @@ private fun PairStep(onDone: () -> Unit) {
             Text("Pular por agora", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.clickable { onDone() })
         } else {
             UbikaButton("ENTRAR NO UBIKA") { onDone() }
+        }
         }
     }
 }

@@ -81,8 +81,9 @@ class MainActivity : ComponentActivity() {
                         com.ubika.movel.network.UbikaApi.sessionToken = token
                         prefs.getString("user_id", null)?.let { com.ubika.movel.network.UbikaApi.userId = it }
                         val me = com.ubika.movel.network.UbikaApi.getMe()
-                        if (me.userId.isEmpty()) {
-                            prefs.edit().remove("session_token").remove("user_id").apply()
+                        // Só desloga em 401/403 — falha de rede mantém a sessão salva
+                        if (me.userId.isEmpty() && !me.networkFail && me.error == "UNAUTHORIZED") {
+                            prefs.edit().remove("session_token").remove("user_id").remove("paired_device").apply()
                             com.ubika.movel.network.UbikaApi.sessionToken = ""
                             loggedIn = false
                         }

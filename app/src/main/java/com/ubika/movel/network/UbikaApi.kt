@@ -227,6 +227,12 @@ object UbikaApi {
         val request = Request.Builder().url(buildUrl("auth/me")).build()
         try {
             client.newCall(request).execute().use { response ->
+                if (response.code == 401 || response.code == 403) {
+                    return@withContext AuthResult(error = "UNAUTHORIZED")
+                }
+                if (!response.isSuccessful) {
+                    return@withContext AuthResult(error = "HTTP_${response.code}", networkFail = true)
+                }
                 val o = JsonParser.parseString(response.body?.string() ?: "").asJsonObject
                 AuthResult(
                     token = sessionToken,
@@ -237,7 +243,7 @@ object UbikaApi {
                     planExpiresAt = o?.get("planExpiresAt")?.asLong ?: 0L
                 )
             }
-        } catch (e: Exception) { AuthResult(error = e.message) }
+        } catch (e: Exception) { AuthResult(error = e.message, networkFail = true) }
     }
 
     /** Jogos instalados = downloads concluídos no PC (state == "done"). */
@@ -301,7 +307,9 @@ data class AuthResult(
     val plan: String = "",
     val effectivePlan: String = "",
     val planExpiresAt: Long = 0L,
-    val error: String? = null
+    val error: String? = null,
+    /** Falha de rede/servidor — NÃO invalida a sessão (diferente de 401). */
+    val networkFail: Boolean = false
 )
 
 data class CheckoutResult(

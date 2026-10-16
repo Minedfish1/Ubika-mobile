@@ -43,6 +43,7 @@ fun StreamScreen(soundManager: SoundManager) {
     var busy by remember { mutableStateOf<String?>(null) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var diag by remember { mutableStateOf<Map<String, String>?>(null) }
+    var speedResult by remember { mutableStateOf<String?>(null) }
 
     // Preferências persistidas localmente (o Moonlight aplica de fato)
     var resolution by remember { mutableStateOf(prefs.getString("resolution", "Nativo") ?: "Nativo") }
@@ -173,6 +174,28 @@ fun StreamScreen(soundManager: SoundManager) {
                         Text(k, color = Color.White, fontSize = 13.sp)
                         Text(v, color = if (v == "OK") Color(0xFF66BB6A) else if (v == "NÃO") Color(0xFFEF5350) else Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+                Spacer(Modifier.height(12.dp))
+                StreamButton(
+                    text = if (busy == "speed") "TESTANDO… (~25 MB)" else "TESTAR VELOCIDADE",
+                    enabled = pcOnline && busy == null,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    soundManager.playClickA()
+                    scope.launch {
+                        busy = "speed"; speedResult = null
+                        try {
+                            val r = UbikaApi.sendPcCommand("speed_test")
+                            speedResult = if (r.bool("ok")) {
+                                "⬇ ${r.obj?.get("mbps")?.asString} Mbps  ·  ping ${r.obj?.get("pingMs")?.asString}ms"
+                            } else "Falhou: ${r.obj?.get("detail")?.asString ?: r.str("error") ?: "erro"}"
+                        } catch (e: Exception) {
+                            speedResult = "Falhou: ${e.message}"
+                        } finally { busy = null }
+                    }
+                }
+                speedResult?.let {
+                    Text(it, color = Color(0xFFD1C4E9), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         }
