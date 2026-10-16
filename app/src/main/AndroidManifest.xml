@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Notificação de download concluído (obrigatória pedir em runtime no API 33+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Visibilidade do Moonlight para abrir o stream pela tela Stream -->
     <queries>

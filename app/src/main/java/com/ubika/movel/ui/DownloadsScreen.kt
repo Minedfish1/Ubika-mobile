@@ -48,11 +48,13 @@ private fun JSONObject.toDownloadItem(existing: DownloadItem? = null): DownloadI
     )
 }
 
+private fun isDone(state: String) = state == "done" || state == "finished"
+
 private fun stateLabel(state: String) = when (state) {
     "fetching-metadata" -> "Buscando metadados..."
     "downloading" -> "Baixando"
     "paused" -> "Pausado"
-    "finished" -> "Concluído"
+    "done", "finished" -> "Concluído"
     "error" -> "Erro"
     "removed" -> "Removido"
     else -> state
@@ -67,7 +69,13 @@ fun DownloadsScreen(soundManager: SoundManager) {
         val id = json.optString("id")
         if (id.isBlank()) return
         val idx = activeDownloads.indexOfFirst { it.id == id }
-        val item = json.toDownloadItem(activeDownloads.getOrNull(idx))
+        val old = activeDownloads.getOrNull(idx)
+        val item = json.toDownloadItem(old)
+        // Transição para concluído → som + notificação do sistema
+        if (isDone(item.state) && old != null && !isDone(old.state)) {
+            soundManager.playNotification()
+            soundManager.showSystemNotification("Download concluído", item.gameName)
+        }
         if (item.state == "removed") {
             if (idx >= 0) activeDownloads.removeAt(idx)
         } else if (idx >= 0) {
@@ -124,7 +132,7 @@ fun DownloadsScreen(soundManager: SoundManager) {
                                 LinearProgressIndicator(
                                     progress = { download.progress / 100f },
                                     modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    color = if (download.state == "finished") Color(0xFF00C853) else Color(0xFF7C4DFF),
+                                    color = if (isDone(download.state)) Color(0xFF00C853) else Color(0xFF7C4DFF),
                                     trackColor = Color(0xFF1E0D33)
                                 )
 
@@ -148,7 +156,7 @@ fun DownloadsScreen(soundManager: SoundManager) {
                                                 UbikaSocket.downloadAction("retomar_download", download.id)
                                             }
                                         }
-                                        if (download.state == "paused" || download.state == "finished" || download.state == "error") {
+                                        if (download.state == "paused" || isDone(download.state) || download.state == "error") {
                                             DownloadAction("REMOVER") {
                                                 UbikaSocket.downloadAction("remover_download", download.id)
                                             }

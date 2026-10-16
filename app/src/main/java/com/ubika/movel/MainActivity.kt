@@ -51,6 +51,11 @@ class MainActivity : ComponentActivity() {
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
+        // Permissão de notificação (API 33+) — sem ela o aviso de "download concluído" não aparece
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
+        }
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
