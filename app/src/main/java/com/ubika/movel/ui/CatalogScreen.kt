@@ -239,9 +239,9 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             Text("ESCOLHA A FONTE", color = Color(0xFFB39DDB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            game.versions.forEach { version ->
+                            game.versionsOrEmpty().forEach { version ->
                                 val isSelected = selectedVersion == version
-                                val hasMagnet = version.magnet.isNotBlank()
+                                val hasMagnet = version.magnetOrEmpty().isNotBlank()
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -270,13 +270,13 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             Spacer(modifier = Modifier.height(14.dp))
 
                             val sel = selectedVersion
-                            val canDownload = sel != null && (sel.magnet.isNotBlank() || sel.links.isNotEmpty())
+                            val canDownload = sel != null && (sel.magnetOrEmpty().isNotBlank() || sel.linksOrEmpty().isNotEmpty())
                             Button(
                                 onClick = {
                                     sel?.let { ver ->
                                         soundManager.playClickA()
                                         coroutineScope.launch {
-                                            UbikaSocket.sendInstallCommand(game.title, ver.magnet, ver.links.firstOrNull() ?: "")
+                                            UbikaSocket.sendInstallCommand(game.title, ver.magnetOrEmpty(), ver.linksOrEmpty().firstOrNull() ?: "")
                                         }
                                         expandedGame = null
                                     }
@@ -402,14 +402,14 @@ private fun SearchResultRow(game: Game, onClick: () -> Unit) {
             Text(game.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2)
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                game.versions.take(3).forEach { v ->
+                game.versionsOrEmpty().take(3).forEach { v ->
                     Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFF311B52)).padding(horizontal = 6.dp, vertical = 2.dp)) {
                         Text(v.source, color = Color(0xFFB39DDB), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                if (game.versions.size > 3) Text("+${game.versions.size - 3}", color = Color.Gray, fontSize = 9.sp)
+                if (game.versionsOrEmpty().size > 3) Text("+${game.versionsOrEmpty().size - 3}", color = Color.Gray, fontSize = 9.sp)
             }
         }
-        Text(game.versions.firstOrNull()?.size ?: "", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(game.versionsOrEmpty().firstOrNull()?.size ?: "", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }

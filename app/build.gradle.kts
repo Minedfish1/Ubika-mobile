@@ -5,10 +5,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Segredos ficam em local.properties (gitignored):
+// Config fica em local.properties (gitignored):
 //   UBIKA_SERVER=http://18.223.108.137:3000
-//   UBIKA_SHARED_SECRET=...
-//   UBIKA_USER_ID=...
+// O segredo compartilhado NÃO vai pro APK — sessão (login) autentica o app;
+// o segredo vive apenas no daemon do PC, que é software instalado do usuário.
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -29,8 +29,6 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "UBIKA_SERVER", "\"${localProp("UBIKA_SERVER")}\"")
-        buildConfigField("String", "UBIKA_SHARED_SECRET", "\"${localProp("UBIKA_SHARED_SECRET")}\"")
-        buildConfigField("String", "UBIKA_USER_ID", "\"${localProp("UBIKA_USER_ID")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

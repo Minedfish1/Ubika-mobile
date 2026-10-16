@@ -10,11 +10,10 @@ import com.ubika.movel.BuildConfig
 object UbikaSocket {
     private const val TAG = "UbikaSocket"
     private val SERVER_URL = BuildConfig.UBIKA_SERVER.ifEmpty { "http://18.223.108.137:3000" }
-    private val SHARED_SECRET = BuildConfig.UBIKA_SHARED_SECRET
 
     private var mSocket: Socket? = null
     private var progressListener: ((JSONObject) -> Unit)? = null
-    private var userId: String = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" }
+    private var userId: String = ""
     private var clientRes: Triple<Int, Int, Int>? = null // width, height, fps do aparelho
 
     val isConnected: Boolean
@@ -23,6 +22,10 @@ object UbikaSocket {
     fun connect(userId: String = "") {
         if (userId.isNotEmpty()) this.userId = userId
         if (mSocket?.connected() == true) return
+        // Sem sessão não conecta: o segredo compartilhado é só do daemon do PC —
+        // se saísse no APK, qualquer um registrava PC falso na conta alheia.
+        val sess = UbikaApi.sessionToken
+        if (sess.isEmpty()) return
         // Socket morto/meio-aberto (app voltou do background, queda de rede):
         // descarta o objeto velho senão os listeners duplicam na reconexão
         mSocket?.off()
@@ -35,10 +38,7 @@ object UbikaSocket {
                 reconnectionDelay = 1000
                 reconnectionDelayMax = 10000
                 timeout = 10000
-                // Sessão autentica o socket — segredo compartilhado não sai no APK
-                val sess = UbikaApi.sessionToken
-                auth = if (sess.isNotEmpty()) mapOf("session" to sess)
-                       else mapOf("token" to SHARED_SECRET) // fallback compat (remover em prod)
+                auth = mapOf("session" to sess)
             }
             mSocket = IO.socket(SERVER_URL, opts)
             mSocket?.on(Socket.EVENT_CONNECT) {

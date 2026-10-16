@@ -132,7 +132,7 @@ fun GameDetailScreen(
                             Text("Requisitos do Sistema", color = Color(0xFFB39DDB), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = game.requirements,
+                                text = game.requirementsOrDefault(),
                                 color = Color.White,
                                 fontSize = 11.sp
                             )
@@ -162,7 +162,7 @@ fun GameDetailScreen(
                                     .weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                items(game.versions) { version ->
+                                items(game.versionsOrEmpty()) { version ->
                                     val isSelected = selectedVersion == version
                                     Row(
                                         modifier = Modifier
@@ -176,7 +176,7 @@ fun GameDetailScreen(
                                     ) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Text(version.source, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                            val tipo = if (version.magnet.isNotBlank()) "TORRENT" else if (version.links.isNotEmpty()) "DIRETO" else "INDISP."
+                                            val tipo = if (version.magnetOrEmpty().isNotBlank()) "TORRENT" else if (version.linksOrEmpty().isNotEmpty()) "DIRETO" else "INDISP."
                                             Box(modifier = Modifier.background(Color(0xFF311B52), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
                                                 Text(tipo, color = Color(0xFFB39DDB), fontSize = 9.sp, fontWeight = FontWeight.Black)
                                             }
@@ -189,7 +189,7 @@ fun GameDetailScreen(
                             Spacer(modifier = Modifier.height(10.dp))
 
                             // Botão de Download / Instalação (Dispara via Socket.io para o PC)
-                            val downloadable = selectedVersion?.let { it.magnet.isNotBlank() || it.links.isNotEmpty() } == true
+                            val downloadable = selectedVersion?.let { it.magnetOrEmpty().isNotBlank() || it.linksOrEmpty().isNotEmpty() } == true
                             val btnText = if (downloadable) "INICIAR DOWNLOAD (${selectedVersion!!.size})" else "SELECIONE UMA VERSÃO"
                             val btnColor = if (downloadable) Color(0xFF673AB7) else Color(0xFF1E0D33)
 
@@ -199,7 +199,7 @@ fun GameDetailScreen(
                                         soundManager.playClickA()
                                         coroutineScope.launch {
                                             // Dispara a ordem de download para o servidor da AWS / Daemon do PC
-                                            UbikaSocket.sendInstallCommand(game.title, ver.magnet, ver.links.firstOrNull() ?: "")
+                                            UbikaSocket.sendInstallCommand(game.title, ver.magnetOrEmpty(), ver.linksOrEmpty().firstOrNull() ?: "")
                                         }
                                     }
                                 },

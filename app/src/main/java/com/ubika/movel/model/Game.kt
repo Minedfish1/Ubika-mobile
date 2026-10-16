@@ -5,14 +5,22 @@ data class Game(
     val title: String,
     val coverUrl: String,
     val description: String,
-    val requirements: String = "• SO: Windows 10/11\n• RAM: 8/16 GB\n• DirectX 12\n• GPU Dedicada",
-    val versions: List<GameVersion>
-)
+    // Gson instancia sem construtor — campos ausentes no JSON chegam null
+    // mesmo declarados non-null; trato na UI com ?: default.
+    val requirements: String? = null,
+    val versions: List<GameVersion>? = null
+) {
+    fun requirementsOrDefault() = requirements ?: "• SO: Windows 10/11\n• RAM: 8/16 GB\n• DirectX 12\n• GPU dedicada"
+    fun versionsOrEmpty() = versions ?: emptyList()
+}
 
 data class GameVersion(
     val source: String,
     val size: String,
-    val magnet: String,
+    val magnet: String? = null,
     /** Links diretos (fontes sem magnet — steamgg, datanodes...). */
-    val links: List<String> = emptyList()
-)
+    val links: List<String>? = null
+) {
+    fun magnetOrEmpty() = magnet ?: ""
+    fun linksOrEmpty() = links ?: emptyList()
+}

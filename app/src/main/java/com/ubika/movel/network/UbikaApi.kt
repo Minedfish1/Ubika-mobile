@@ -21,11 +21,10 @@ object UbikaApi {
     private const val TAG = "UbikaApi"
     val SERVER = BuildConfig.UBIKA_SERVER.ifEmpty { "http://18.223.108.137:3000" }
     private val BASE_URL = "$SERVER/api"
-    private val SHARED_SECRET = BuildConfig.UBIKA_SHARED_SECRET
 
-    /** userId/token de sessão — preenchidos após login; fallback de dev. */
+    /** userId/token de sessão — preenchidos após login. */
     var sessionToken: String = ""
-    var userId: String = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" }
+    var userId: String = ""
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
