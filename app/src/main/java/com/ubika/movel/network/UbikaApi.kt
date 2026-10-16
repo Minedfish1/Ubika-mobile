@@ -143,7 +143,11 @@ object UbikaApi {
                 val o = JsonParser.parseString(body).asJsonObject
                 PcStatus(
                     online = o.get("online")?.asBoolean == true,
-                    streamHost = o.get("streamHost")?.asString ?: ""
+                    streamHost = o.get("streamHost")?.asString ?: "",
+                    streamHostV6 = o.get("streamHostV6")?.asString ?: "",
+                    lanHost = o.get("lanHost")?.asString ?: "",
+                    // null = ainda não medido pela VPS
+                    portsOpen = if (o.has("portsOpen") && !o.get("portsOpen").isJsonNull) o.get("portsOpen").asBoolean else null
                 )
             }
         } catch (e: Exception) {
@@ -238,6 +242,8 @@ object UbikaApi {
                     token = sessionToken,
                     userId = o?.get("userId")?.asString ?: "",
                     email = o?.get("email")?.asString ?: "",
+                    name = o?.get("name")?.asString ?: "",
+                    avatarUrl = o?.get("avatarUrl")?.asString ?: "",
                     plan = o?.get("plan")?.asString ?: "",
                     effectivePlan = o?.get("effectivePlan")?.asString ?: o?.get("plan")?.asString ?: "",
                     planExpiresAt = o?.get("planExpiresAt")?.asLong ?: 0L
@@ -245,6 +251,19 @@ object UbikaApi {
             }
         } catch (e: Exception) { AuthResult(error = e.message, networkFail = true) }
     }
+
+    /** POST /api/me — salva nome de exibição e/ou avatar (PNG em base64). */
+    suspend fun updateMe(name: String? = null, avatarBase64: String? = null): Boolean =
+        withContext(Dispatchers.IO) {
+            val json = com.google.gson.JsonObject()
+            if (name != null) json.addProperty("name", name)
+            if (avatarBase64 != null) json.addProperty("avatarBase64", avatarBase64)
+            val request = Request.Builder().url(buildUrl("me"))
+                .post(json.toString().toRequestBody("application/json".toMediaType())).build()
+            try {
+                client.newCall(request).execute().use { it.isSuccessful }
+            } catch (e: Exception) { Log.e(TAG, "updateMe: ${e.message}"); false }
+        }
 
     /** Jogos instalados = downloads concluídos no PC (state == "done"). */
     suspend fun getInstalledGames(): List<InstalledGame> = withContext(Dispatchers.IO) {
@@ -297,13 +316,18 @@ data class CatalogResponse(
 
 data class PcStatus(
     val online: Boolean = false,
-    val streamHost: String = ""
+    val streamHost: String = "",
+    val streamHostV6: String = "",
+    val lanHost: String = "",
+    val portsOpen: Boolean? = null
 )
 
 data class AuthResult(
     val token: String = "",
     val userId: String = "",
     val email: String = "",
+    val name: String = "",
+    val avatarUrl: String = "",
     val plan: String = "",
     val effectivePlan: String = "",
     val planExpiresAt: Long = 0L,

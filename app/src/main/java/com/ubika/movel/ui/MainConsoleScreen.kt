@@ -66,6 +66,8 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
     val prefs = remember { context.getSharedPreferences("ubika_prefs", Context.MODE_PRIVATE) }
     var showProfile by remember { mutableStateOf(false) }
     var avatarPath by remember { mutableStateOf(prefs.getString("avatar_path", "") ?: "") }
+    var avatarUrl by remember { mutableStateOf("") }
+    var userName by remember { mutableStateOf(prefs.getString("user_name", "") ?: "") }
     var plan by remember { mutableStateOf("") }
     var planExpiresAt by remember { mutableStateOf(0L) }
     var renewSid by remember { mutableStateOf<String?>(null) }
@@ -78,6 +80,8 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
         realDeviceRes(context)?.let { (w, h, fps) -> UbikaSocket.setClientResolution(w, h, fps) }
         val me = UbikaApi.getMe()
         if (me.effectivePlan.isNotEmpty()) { plan = me.effectivePlan; planExpiresAt = me.planExpiresAt }
+        if (me.name.isNotEmpty()) { userName = me.name; prefs.edit().putString("user_name", me.name).apply() }
+        if (me.avatarUrl.isNotEmpty()) avatarUrl = "${me.avatarUrl}?v=${System.currentTimeMillis() / 60000}"
         while (true) { delay(1000); currentTime = LocalTime.now() }
     }
 
@@ -195,7 +199,7 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
                                             .border(2.dp, Color(0xFF7C4DFF), CircleShape)
                                             .clickable { soundManager.playClickA(); showProfile = true }
                                     ) {
-                                        AvatarImage(avatarPath, Modifier.fillMaxSize())
+                                        AvatarImage(avatarPath, avatarUrl, Modifier.fillMaxSize())
                                     }
                                 }
                             }
@@ -251,7 +255,10 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
             ProfileSheet(
                 soundManager = soundManager,
                 avatarPath = avatarPath,
+                avatarUrl = avatarUrl,
+                userName = userName,
                 onAvatar = { path -> avatarPath = path; prefs.edit().putString("avatar_path", path).apply() },
+                onName = { n -> userName = n; prefs.edit().putString("user_name", n).apply() },
                 plan = plan,
                 planExpiresAt = planExpiresAt,
                 onClose = { showProfile = false },

@@ -73,7 +73,26 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
     val listState = rememberLazyListState()
 
     LaunchedEffect(expandedGame) {
-        if (expandedGame != null) gameToDisplay = expandedGame
+        expandedGame?.let { g ->
+            gameToDisplay = g
+            // Destaques/trending chegam sem fontes — busca na biblioteca pelo título
+            // pra obter as versions baixáveis (senão o botão fica preso em "SELECIONE UMA FONTE")
+            if (g.versionsOrEmpty().isEmpty()) {
+                try {
+                    val title = g.title.replace(Regex("\\s*[\\[(].*"), "").trim()
+                    val r = UbikaApi.getCatalogGames(search = title, page = 1)
+                    val match = r.games.firstOrNull { it.versionsOrEmpty().isNotEmpty() }
+                    if (match != null) {
+                        // Mantém capa/descrição do trending, adiciona as fontes da biblioteca
+                        gameToDisplay = match.copy(
+                            coverUrl = g.coverUrl.ifBlank { match.coverUrl },
+                            description = g.description.ifBlank { match.description },
+                            requirements = if (g.requirements.isNullOrBlank()) match.requirements else g.requirements
+                        )
+                    }
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     // 1. Efeito de Busca (Debounce)

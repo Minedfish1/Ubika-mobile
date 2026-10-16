@@ -50,7 +50,10 @@ import java.io.FileOutputStream
 fun ProfileSheet(
     soundManager: SoundManager,
     avatarPath: String,
+    avatarUrl: String,
+    userName: String,
     onAvatar: (String) -> Unit,
+    onName: (String) -> Unit,
     plan: String,
     planExpiresAt: Long,
     onClose: () -> Unit,
@@ -60,6 +63,9 @@ fun ProfileSheet(
     val scope = rememberCoroutineScope()
     var cropUri by remember { mutableStateOf<Uri?>(null) }
     var renewBusy by remember { mutableStateOf(false) }
+    var nameField by remember { mutableStateOf(userName) }
+    var savingName by remember { mutableStateOf(false) }
+    var nameMsg by remember { mutableStateOf<String?>(null) }
 
     // Galeria → overlay de crop
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -89,9 +95,40 @@ fun ProfileSheet(
                     .clickable { picker.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
-                AvatarImage(avatarPath, Modifier.fillMaxSize())
+                AvatarImage(avatarPath, avatarUrl, Modifier.fillMaxSize())
             }
             Text("Toque na foto para trocar", color = Color.Gray, fontSize = 11.sp)
+
+            // Nome de exibição — salva no servidor
+            androidx.compose.material3.OutlinedTextField(
+                value = nameField,
+                onValueChange = { if (it.length <= 40) { nameField = it; nameMsg = null } },
+                placeholder = { Text("Seu nome de exibição", color = Color.DarkGray) },
+                singleLine = true,
+                trailingIcon = {
+                    TextButton(
+                        onClick = {
+                            if (nameField.isBlank() || savingName) return@TextButton
+                            soundManager.playClickA()
+                            savingName = true
+                            scope.launch {
+                                val ok = UbikaApi.updateMe(name = nameField.trim())
+                                savingName = false
+                                if (ok) { onName(nameField.trim()); nameMsg = "Salvo ✓" }
+                                else nameMsg = "Falhou — tente de novo"
+                            }
+                        },
+                        enabled = nameField.isNotBlank() && !savingName
+                    ) { Text(if (savingName) "…" else "SALVAR", color = Color(0xFF7C4DFF), fontSize = 12.sp, fontWeight = FontWeight.Black) }
+                },
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF7C4DFF), unfocusedBorderColor = Color(0xFF512DA8),
+                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color(0xFF1E0D33), unfocusedContainerColor = Color(0xFF1E0D33)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            nameMsg?.let { Text(it, color = if (it.endsWith("✓")) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 11.sp) }
 
             PlanRow(plan, planExpiresAt)
 
@@ -120,6 +157,13 @@ fun ProfileSheet(
     cropUri?.let { uri ->
         AvatarCropOverlay(uri, onDone = { path ->
             onAvatar(path); cropUri = null
+            // Sobe a foto pro servidor — perfil fica igual em qualquer aparelho
+            scope.launch {
+                try {
+                    val b = File(path).readBytes()
+                    UbikaApi.updateMe(avatarBase64 = android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP))
+                } catch (_: Exception) {}
+            }
         }) { cropUri = null }
     }
 }
@@ -212,12 +256,17 @@ private fun PairRow(soundManager: SoundManager) {
     }
 }
 
-/** Avatar salvo ou inicial do email como placeholder. */
+/** Avatar: arquivo local > URL do servidor > placeholder "U". */
 @Composable
-fun AvatarImage(avatarPath: String, modifier: Modifier = Modifier) {
+fun AvatarImage(avatarPath: String, avatarUrl: String = "", modifier: Modifier = Modifier) {
     val f = if (avatarPath.isNotBlank()) File(avatarPath) else null
-    if (f?.exists() == true) {
-        AsyncImage(model = f, contentDescription = "avatar", contentScale = ContentScale.Crop, modifier = modifier)
+    val model: Any? = when {
+        f?.exists() == true -> f
+        avatarUrl.isNotBlank() -> avatarUrl
+        else -> null
+    }
+    if (model != null) {
+        AsyncImage(model = model, contentDescription = "avatar", contentScale = ContentScale.Crop, modifier = modifier)
     } else {
         Box(modifier = modifier.background(Color(0xFF311B52)), contentAlignment = Alignment.Center) {
             Text("U", color = Color(0xFFB39DDB), fontSize = 40.sp, fontWeight = FontWeight.Black)

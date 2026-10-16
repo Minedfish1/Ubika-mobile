@@ -40,6 +40,9 @@ fun StreamScreen(soundManager: SoundManager) {
 
     var pcOnline by remember { mutableStateOf(false) }
     var streamHost by remember { mutableStateOf("") }
+    var streamHostV6 by remember { mutableStateOf("") }
+    var lanHost by remember { mutableStateOf("") }
+    var portsOpen by remember { mutableStateOf<Boolean?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var diag by remember { mutableStateOf<Map<String, String>?>(null) }
@@ -55,13 +58,22 @@ fun StreamScreen(soundManager: SoundManager) {
             val st = UbikaApi.getPcStatus()
             pcOnline = st.online
             streamHost = st.streamHost
+            streamHostV6 = st.streamHostV6
+            lanHost = st.lanHost
+            portsOpen = st.portsOpen
             delay(5000)
         }
     }
 
     fun launchMoonlight() {
         soundManager.playClickA()
-        val host = streamHost
+        // IPv6 público vence: conecta de fora sem depender de UPnP/CGNAT.
+        // Depois IPv4 público; lanHost só alcança na mesma rede — último recurso.
+        val host = when {
+            streamHostV6.isNotBlank() -> "[$streamHostV6]"
+            streamHost.isNotBlank() -> streamHost
+            else -> lanHost
+        }
         if (!pcOnline || host.isBlank()) {
             feedback = "PC offline ou sem IP de stream — inicie o daemon no PC."
             return
@@ -102,9 +114,19 @@ fun StreamScreen(soundManager: SoundManager) {
                         color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black
                     )
                     Text(
-                        if (streamHost.isNotBlank()) "Host de stream: $streamHost" else "Inicie o daemon no PC (UbikaPc → npm start)",
+                        if (streamHost.isNotBlank() || streamHostV6.isNotBlank())
+                            "Host: ${if (streamHostV6.isNotBlank()) "[$streamHostV6] (IPv6 direto)" else streamHost}"
+                        else "Inicie o daemon no PC (UbikaPC.exe)",
                         color = Color.Gray, fontSize = 12.sp
                     )
+                    if (portsOpen != null) {
+                        Text(
+                            if (portsOpen == true) "Acesso externo: portas abertas ✓"
+                            else "Acesso externo: portas fechadas — ISP com CGNAT ou UPnP desligado",
+                            color = if (portsOpen == true) Color(0xFF66BB6A) else Color(0xFFEF5350),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         }
