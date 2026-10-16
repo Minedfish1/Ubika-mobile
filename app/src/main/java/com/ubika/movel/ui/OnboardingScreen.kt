@@ -216,7 +216,7 @@ private fun PairStep(onDone: () -> Unit) {
     ) {
         Text("CONECTAR SEU PC", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
         Text(
-            "No PC, abra a pasta UbikaPc e rode:  npm start\nO código de 6 dígitos aparece no console (e no arquivo PAREAR.txt).",
+            "No PC, abra o UbikaPC.exe — o painel mostra o código de 6 dígitos.\nEle troca sozinho a cada ~9 minutos; use sempre o atual.",
             color = Color.Gray, fontSize = 13.sp, textAlign = TextAlign.Center, lineHeight = 19.sp
         )
 
