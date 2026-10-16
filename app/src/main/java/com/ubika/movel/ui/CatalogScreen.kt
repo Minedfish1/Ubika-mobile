@@ -309,7 +309,9 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                                     val r = UbikaApi.sendPcCommand("iniciar_download", mapOf(
                                                         "gameName" to game.title,
                                                         "magnetLink" to ver.magnetOrEmpty(),
-                                                        "link" to (ver.linksOrEmpty().firstOrNull() ?: "")
+                                                        "link" to (ver.linksOrEmpty().firstOrNull() ?: ""),
+                                                        "coverUrl" to game.coverUrl,
+                                                        "description" to game.description
                                                     ))
                                                     if (r.bool("ok")) {
                                                         android.widget.Toast.makeText(context, "Download iniciado no PC — veja na aba Downloads", android.widget.Toast.LENGTH_LONG).show()
