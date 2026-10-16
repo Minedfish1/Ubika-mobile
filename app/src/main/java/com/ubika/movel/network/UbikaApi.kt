@@ -19,16 +19,21 @@ import java.util.concurrent.TimeUnit
 
 object UbikaApi {
     private const val TAG = "UbikaApi"
-    private val BASE_URL = (BuildConfig.UBIKA_SERVER.ifEmpty { "http://18.223.108.137:3000" }) + "/api"
-    private val USER_ID = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" } // tem de ser igual ao do client.js
+    val SERVER = BuildConfig.UBIKA_SERVER.ifEmpty { "http://18.223.108.137:3000" }
+    private val BASE_URL = "$SERVER/api"
     private val SHARED_SECRET = BuildConfig.UBIKA_SHARED_SECRET
+
+    /** userId/token de sessão — preenchidos após login; fallback de dev. */
+    var sessionToken: String = ""
+    var userId: String = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS) // maior que os 20s de espera da AWS pelo PC
         .addInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder()
-                .header("x-ubika-token", SHARED_SECRET).build())
+            val b = chain.request().newBuilder().header("x-ubika-token", SHARED_SECRET)
+            if (sessionToken.isNotEmpty()) b.header("x-ubika-session", sessionToken)
+            chain.proceed(b.build())
         }
         .addInterceptor(HttpLoggingInterceptor { Log.d("UbikaHTTP", it) }
             .apply { level = HttpLoggingInterceptor.Level.BODY })
@@ -38,7 +43,8 @@ object UbikaApi {
 
     private fun buildUrl(path: String, vararg params: Pair<String, String>) =
         "$BASE_URL/$path".toHttpUrl().newBuilder().apply {
-            addQueryParameter("userId", USER_ID)
+            if (sessionToken.isNotEmpty()) addQueryParameter("session", sessionToken)
+            else addQueryParameter("userId", userId)
             params.forEach { (k, v) -> addQueryParameter(k, v) }
         }.build()
 
@@ -143,11 +149,72 @@ object UbikaApi {
         }
     }
 
+    // ------------------------- Auth / Pareamento -------------------------
+
+    private suspend fun authCall(path: String, email: String, password: String): AuthResult =
+        withContext(Dispatchers.IO) {
+            val body = """{"email":${com.google.gson.JsonPrimitive(email)},"password":${com.google.gson.JsonPrimitive(password)}}"""
+                .toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url("$BASE_URL/$path").post(body).build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    val respBody = response.body?.string()
+                    if (!response.isSuccessful) return@withContext AuthResult(error = errorMessage(response.code, respBody))
+                    val o = JsonParser.parseString(respBody).asJsonObject
+                    AuthResult(
+                        token = o.get("token")?.asString ?: "",
+                        userId = o.get("userId")?.asString ?: "",
+                        email = o.get("email")?.asString ?: email,
+                        plan = o.get("plan")?.asString ?: ""
+                    )
+                }
+            } catch (e: Exception) {
+                AuthResult(error = e.message ?: "FALHA_DE_REDE")
+            }
+        }
+
+    suspend fun register(email: String, password: String) = authCall("auth/register", email, password)
+    suspend fun login(email: String, password: String) = authCall("auth/login", email, password)
+
+    /** Pareia o PC cujo daemon exibe `code` (6 dígitos) à conta logada. */
+    suspend fun pairPc(code: String): JsonObjectHolder = withContext(Dispatchers.IO) {
+        val body = """{"code":${com.google.gson.JsonPrimitive(code)}}"""
+            .toRequestBody("application/json".toMediaType())
+        val request = Request.Builder().url("$BASE_URL/pair").post(body).build()
+        client.newCall(request).execute().use { response ->
+            val respBody = response.body?.string()
+            if (!response.isSuccessful) throw Exception(errorMessage(response.code, respBody))
+            JsonObjectHolder(respBody ?: "{}")
+        }
+    }
+
+    /** Jogos instalados = downloads concluídos no PC (state == "done"). */
+    suspend fun getInstalledGames(): List<InstalledGame> = withContext(Dispatchers.IO) {
+        try {
+            val r = sendPcCommand("listar_downloads")
+            val arr = r.obj?.getAsJsonArray("downloads") ?: return@withContext emptyList()
+            arr.mapNotNull { el ->
+                val o = el.asJsonObject
+                if (o.get("state")?.asString != "done") return@mapNotNull null
+                InstalledGame(
+                    id = o.get("id")?.asString ?: "",
+                    name = o.get("gameName")?.asString ?: "Jogo",
+                    sizeBytes = o.get("length")?.asLong ?: 0L,
+                    savePath = o.get("savePath")?.asString ?: "",
+                    finishedAt = o.get("finishedAt")?.asLong ?: 0L
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getInstalledGames falhou: ${e.message}")
+            emptyList()
+        }
+    }
+
     /** POST /api/pc/command — retorna o JSON de resposta do PC ou lança exceção. */
     suspend fun sendPcCommand(action: String, payload: Map<String, Any> = emptyMap()): JsonObjectHolder =
         withContext(Dispatchers.IO) {
             val json = com.google.gson.JsonObject().apply {
-                addProperty("userId", USER_ID)
+                addProperty("userId", userId)
                 addProperty("action", action)
                 if (payload.isNotEmpty()) add("payload", gson.toJsonTree(payload))
             }
@@ -172,6 +239,22 @@ data class CatalogResponse(
 data class PcStatus(
     val online: Boolean = false,
     val streamHost: String = ""
+)
+
+data class AuthResult(
+    val token: String = "",
+    val userId: String = "",
+    val email: String = "",
+    val plan: String = "",
+    val error: String? = null
+)
+
+data class InstalledGame(
+    val id: String,
+    val name: String,
+    val sizeBytes: Long,
+    val savePath: String,
+    val finishedAt: Long
 )
 
 /** JSON bruto de resposta do PC — a tela extrai os campos que precisar. */

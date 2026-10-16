@@ -65,15 +65,26 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Controla qual tela está visível
+                    val prefs = remember { getSharedPreferences("ubika_prefs", MODE_PRIVATE) }
                     var showSplash by remember { mutableStateOf(true) }
+                    var loggedIn by remember { mutableStateOf(prefs.getString("session_token", null) != null) }
 
-                    if (showSplash) {
-                        com.ubika.movel.ui.SplashScreen(
-                            onFinished = { showSplash = false }
-                        )
-                    } else {
-                        com.ubika.movel.ui.MainConsoleScreen()
+                    // Restaura sessão persistida
+                    LaunchedEffect(Unit) {
+                        prefs.getString("session_token", null)?.let { com.ubika.movel.network.UbikaApi.sessionToken = it }
+                        prefs.getString("user_id", null)?.let { com.ubika.movel.network.UbikaApi.userId = it }
+                    }
+
+                    when {
+                        showSplash -> com.ubika.movel.ui.SplashScreen(onFinished = { showSplash = false })
+                        !loggedIn -> com.ubika.movel.ui.OnboardingScreen(onDone = { token, uid ->
+                            prefs.edit()
+                                .putString("session_token", token)
+                                .putString("user_id", uid)
+                                .apply()
+                            loggedIn = true
+                        })
+                        else -> com.ubika.movel.ui.MainConsoleScreen()
                     }
                 }
             }

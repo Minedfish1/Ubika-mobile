@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -56,7 +58,7 @@ fun MainConsoleScreen() {
     val glyphs = GamepadManager.glyphsFor(padType)
 
     LaunchedEffect(Unit) {
-        UbikaSocket.connect()
+        UbikaSocket.connect(UbikaApi.userId)
         while (true) { delay(1000); currentTime = LocalTime.now() }
     }
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -172,94 +174,78 @@ fun MainConsoleScreen() {
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun LibraryHubContent(soundManager: SoundManager, onGameSelected: (Game) -> Unit) {
-    var trendingGames by remember { mutableStateOf<List<Game>>(emptyList()) }
+    var installed by remember { mutableStateOf<List<com.ubika.movel.network.InstalledGame>>(emptyList()) }
+    var pcOnline by remember { mutableStateOf<Boolean?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var heroGame by remember { mutableStateOf<Game?>(null) }
 
     LaunchedEffect(Unit) {
-        try {
-            val games = UbikaApi.getTrendingGames()
-            trendingGames = games
-            if (games.isNotEmpty()) {
-                heroGame = games[0]
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        } finally {
+        while (true) {
+            val st = UbikaApi.getPcStatus()
+            pcOnline = st.online
+            if (st.online) installed = UbikaApi.getInstalledGames()
             isLoading = false
+            delay(8000)
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when {
+            isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color(0xFF7C4DFF))
             }
-        } else if (trendingGames.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Nenhum destaque encontrado na RAWG.", color = Color.Gray, fontSize = 14.sp)
-            }
-        } else {
-            val currentHero = heroGame ?: trendingGames[0]
-
-            Crossfade(targetState = currentHero.coverUrl, animationSpec = tween(800), label = "") { coverUrl ->
-                AsyncImage(model = coverUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().alpha(0.2f))
-            }
-            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF0A0510)))))
-
-            LazyRow(
+            pcOnline == false -> EmptyHint(
+                "PC offline",
+                "Abra o UbikaPc e rode  npm start  — a biblioteca mostra os jogos baixados neste PC."
+            )
+            installed.isEmpty() -> EmptyHint(
+                "Biblioteca vazia",
+                "Jogos instalados pelo download remoto aparecem aqui quando terminam (100%)."
+            )
+            else -> LazyRow(
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxSize()
             ) {
-                item {
-                    Column {
-                        Text("DESTAQUES DA RAWG", color = Color(0xFFB39DDB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        AnimatedContent(
-                            targetState = currentHero,
-                            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
-                            label = "hero_anim"
-                        ) { activeGame ->
-                            Box(
-                                modifier = Modifier
-                                    .width(300.dp).height(180.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(2.dp, Color(0xFF512DA8), RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        soundManager.playClickA()
-                                        onGameSelected(activeGame)
-                                    }
-                            ) {
-                                AsyncImage(model = activeGame.coverUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)))).padding(16.dp), contentAlignment = Alignment.BottomStart) {
-                                    Text(activeGame.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    Column {
-                        Text("OUTROS DESTAQUES", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            trendingGames.forEach { game ->
-                                if (game.id != currentHero.id) {
-                                    AsyncImage(
-                                        model = game.coverUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                                        modifier = Modifier.width(120.dp).height(160.dp).clip(RoundedCornerShape(8.dp)).clickable { soundManager.playClickA(); heroGame = game }
-                                    )
-                                }
-                            }
-                        }
+                items(installed) { g ->
+                    var focused by remember { mutableStateOf(false) }
+                    Column(
+                        modifier = Modifier
+                            .width(220.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF140822))
+                            .border(
+                                if (focused) 3.dp else 1.dp,
+                                if (focused) Color(0xFF7C4DFF) else Color(0xFF311B52),
+                                RoundedCornerShape(14.dp)
+                            )
+                            .focusable()
+                            .onFocusChanged { focused = it.isFocused }
+                            .clickable { soundManager.playClickA() }
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFF7C4DFF), modifier = Modifier.size(40.dp))
+                        Text(g.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 2)
+                        Text("${"%.1f".format(g.sizeBytes / 1e9)} GB • instalado", color = Color.Gray, fontSize = 12.sp)
+                        Text(g.savePath, color = Color.DarkGray, fontSize = 10.sp, maxLines = 1)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyHint(title: String, subtitle: String) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(8.dp))
+        Text(subtitle, color = Color.Gray, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 

@@ -10,20 +10,21 @@ import com.ubika.movel.BuildConfig
 object UbikaSocket {
     private const val TAG = "UbikaSocket"
     private val SERVER_URL = BuildConfig.UBIKA_SERVER.ifEmpty { "http://18.223.108.137:3000" }
-    private val USER_ID = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" } // tem de ser igual ao do client.js
     private val SHARED_SECRET = BuildConfig.UBIKA_SHARED_SECRET
 
     private var mSocket: Socket? = null
     private var progressListener: ((JSONObject) -> Unit)? = null
+    private var userId: String = BuildConfig.UBIKA_USER_ID.ifEmpty { "utilizador_teste_123" }
 
     val isConnected: Boolean
         get() = mSocket?.connected() == true
 
-    fun connect() {
+    fun connect(userId: String = "") {
+        if (userId.isNotEmpty()) this.userId = userId
         if (mSocket != null && (mSocket?.connected() == true)) return
         try {
             val opts = IO.Options().apply {
-                query = "device=android&userId=$USER_ID"
+                query = "device=android&userId=${this@UbikaSocket.userId}"
                 reconnection = true
                 reconnectionDelay = 1000
                 reconnectionDelayMax = 10000
@@ -55,7 +56,7 @@ object UbikaSocket {
     fun sendCommand(payload: JSONObject, onResult: ((ok: Boolean, error: String?, resp: JSONObject?) -> Unit)? = null) {
         try {
             val data = JSONObject()
-            data.put("userId", USER_ID)
+            data.put("userId", userId)
             data.put("payload", payload)
 
             if (onResult == null) {
