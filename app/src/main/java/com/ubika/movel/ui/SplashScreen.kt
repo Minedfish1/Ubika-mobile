@@ -47,12 +47,13 @@ fun SplashScreen(onFinished: () -> Unit) {
     )
     val uDrop by animateFloatAsState(
         targetValue = if (phase >= 2) 1f else 0f,
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        // Spring: o U passa levemente do ponto e assenta — efeito "pousar na manete"
+        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow),
         label = "uDrop"
     )
     val padDraw by animateFloatAsState(
         targetValue = if (phase >= 2) 1f else 0f,
-        animationSpec = tween(1200, delayMillis = 120, easing = FastOutSlowInEasing),
+        animationSpec = tween(1100, delayMillis = 100, easing = FastOutSlowInEasing),
         label = "padDraw"
     )
     val glow by animateFloatAsState(
@@ -163,10 +164,10 @@ fun SplashScreen(onFinished: () -> Unit) {
                 fontWeight = FontWeight.Black,
                 color = UbikaPurple,
                 modifier = Modifier.graphicsLayer {
-                    // A perninha do U "cai" para dentro da manete formada
-                    // (115dp = centro visual da silhueta, que vive ~29dp abaixo do centro da tela)
-                    translationY = uDrop * 115.dp.toPx()
-                    val s = 1f - 0.45f * uDrop
+                    // Sobe ao entrar + cai com spring pra dentro da manete formada
+                    // (115dp = centro visual da silhueta, ~29dp abaixo do centro da tela)
+                    translationY = (1f - lettersIn) * 36.dp.toPx() + uDrop * 115.dp.toPx()
+                    val s = (0.85f + 0.15f * lettersIn) * (1f - 0.45f * uDrop)
                     scaleX = s
                     scaleY = s
                     alpha = lettersIn

@@ -81,6 +81,20 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
 
     LaunchedEffect(Unit) {
         UbikaSocket.connect(UbikaApi.userId)
+        // Handoff GameSir: controle desplugou do PC → a sessão passa pro celular
+        UbikaSocket.setControllerEventListener { ev ->
+            val type = ev.optString("type")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (type == "unplugged") {
+                    soundManager.playOpen()
+                    if (currentScreen != "Stream") currentScreen = "Stream"
+                    android.widget.Toast.makeText(
+                        context, "Controle desconectado — a sessão passou pro celular",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
         realDeviceRes(context)?.let { (w, h, fps) -> UbikaSocket.setClientResolution(w, h, fps) }
         val me = UbikaApi.getMe()
         if (me.effectivePlan.isNotEmpty()) { plan = me.effectivePlan; planExpiresAt = me.planExpiresAt }
@@ -230,7 +244,21 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
                 }
 
                 Box(modifier = Modifier.weight(1f)) {
-                    AnimatedContent(targetState = currentScreen, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) }, label = "screen_trans") { targetScreen ->
+                    AnimatedContent(
+                        targetState = currentScreen,
+                        transitionSpec = {
+                            // Desliza suave na direção da navegação + fade cruzado
+                            (slideInHorizontally(
+                                animationSpec = tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                                initialOffsetX = { it / 14 }
+                            ) + fadeIn(tween(320))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                                targetOffsetX = { -it / 14 }
+                            ) + fadeOut(tween(300)))
+                        },
+                        label = "screen_trans"
+                    ) { targetScreen ->
                         when (targetScreen) {
                             "Biblioteca" -> LibraryHubContent(soundManager, onGameSelected = { game -> selectedGameForDetail = game })
                             "Catálogo" -> CatalogScreen(soundManager, globalSearchQuery)

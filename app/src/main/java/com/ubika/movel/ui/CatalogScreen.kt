@@ -3,6 +3,13 @@ package com.ubika.movel.ui
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -196,7 +204,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             item {
                                 Column {
                                     ShelfTitle("EM ALTA")
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    AutoScrollRow {
                                         itemsIndexed(trending.drop(3)) { index, game ->
                                             AnimatedEntry(index) {
                                                 ShelfCard(game, soundManager) { soundManager.playSelect(); expandedGame = game; selectedVersion = null }
@@ -213,7 +221,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             item {
                                 Column {
                                     ShelfTitle("$genreLabel EM ALTA")
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    AutoScrollRow {
                                         itemsIndexed(gg) { index, game ->
                                             AnimatedEntry(index) {
                                                 ShelfCard(game, soundManager) { soundManager.playSelect(); expandedGame = game; selectedVersion = null }
@@ -263,8 +271,11 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
         // capa à esquerda | título, descrição, requisitos, fontes e BAIXAR à direita
         AnimatedVisibility(
             visible = expandedGame != null,
-            enter = fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.94f),
-            exit = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.94f)
+            enter = fadeIn(tween(280)) + scaleIn(
+                spring(dampingRatio = 0.72f, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium),
+                initialScale = 0.90f
+            ),
+            exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.92f)
         ) {
             gameToDisplay?.let { game ->
                 val context = LocalContext.current
@@ -410,6 +421,17 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
 private fun HeroBanner(game: Game, soundManager: SoundManager, onClick: (Game) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.02f else 1f, tween(180), label = "hero_s")
+    // Ken Burns: a capa respira devagar — o banner parece vivo
+    val kb by rememberInfiniteTransition(label = "kb").animateFloat(
+        initialValue = 1f, targetValue = 1.09f,
+        animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "kb_s"
+    )
+    val badgeAlpha by rememberInfiniteTransition(label = "bdg").animateFloat(
+        initialValue = 0.75f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse),
+        label = "bdg_a"
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -425,8 +447,10 @@ private fun HeroBanner(game: Game, soundManager: SoundManager, onClick: (Game) -
             .focusable()
             .clickable { onClick(game) }
     ) {
-        // backdrop = capa do jogo cropada
-        GameCover(game, Modifier.fillMaxSize())
+        // backdrop = capa do jogo cropada (Ken Burns lento)
+        Box(Modifier.fillMaxSize().graphicsLayer { scaleX = kb; scaleY = kb }) {
+            GameCover(game, Modifier.fillMaxSize())
+        }
         // scrim: escuro embaixo/esquerda pro texto ler
         Box(
             Modifier.fillMaxSize().background(
@@ -446,7 +470,7 @@ private fun HeroBanner(game: Game, soundManager: SoundManager, onClick: (Game) -
             modifier = Modifier.align(Alignment.BottomStart).padding(18.dp).fillMaxWidth(0.75f)
         ) {
             Box(
-                Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFF7C4DFF)).padding(horizontal = 8.dp, vertical = 3.dp)
+                Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFF7C4DFF).copy(alpha = badgeAlpha)).padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text("DESTAQUE DA SEMANA", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
             }
@@ -468,11 +492,45 @@ private fun HeroBanner(game: Game, soundManager: SoundManager, onClick: (Game) -
     }
 }
 
-/** Cabeçalho de prateleira — barra de acento + título. */
+/**
+ * Prateleira viva: deriva sozinha bem devagar (~55px/s), pausa quando o
+ * usuário foca num card ou arrasta, e ao chegar no fim volta com um
+ * "rewind" suave pro começo.
+ */
+@Composable
+private fun AutoScrollRow(content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+    val state = rememberLazyListState()
+    var paused by remember { mutableStateOf(false) }
+    LaunchedEffect(paused) {
+        while (true) {
+            delay(16)
+            if (!paused && !state.isScrollInProgress && state.layoutInfo.totalItemsCount > 0) {
+                state.scroll { scrollBy(0.9f) }
+                if (!state.canScrollForward) {
+                    // fim da prateleira → rewind elegante pro início
+                    state.animateScrollToItem(0)
+                    delay(1200)
+                }
+            }
+        }
+    }
+    LazyRow(
+        state = state,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.onFocusEvent { paused = it.hasFocus }
+    ) { content() }
+}
+
+/** Cabeçalho de prateleira — barra de acento pulsante + título. */
 @Composable
 private fun ShelfTitle(title: String) {
+    val pulse by rememberInfiniteTransition(label = "bar").animateFloat(
+        initialValue = 0.55f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Reverse),
+        label = "bar_a"
+    )
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(4.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF7C4DFF)))
+        Box(Modifier.width(4.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF7C4DFF).copy(alpha = pulse)))
         Spacer(Modifier.width(8.dp))
         Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = OrbitronFamily, letterSpacing = 2.sp)
     }
@@ -484,7 +542,13 @@ private fun ShelfTitle(title: String) {
 private fun ShelfCard(game: Game, soundManager: SoundManager, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, tween(150), label = "shelf_s")
-    val glow = if (focused) Color(0xFF9575CD) else Color(0xFF311B52)
+    // Borda respira enquanto focado — glow pulsante estilo Big Picture
+    val glowPulse by rememberInfiniteTransition(label = "gl").animateFloat(
+        initialValue = 0.45f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse),
+        label = "gl_a"
+    )
+    val glow = if (focused) Color(0xFF9575CD).copy(alpha = glowPulse) else Color(0xFF311B52)
     Column(modifier = Modifier.width(96.dp)) {
         GameCover(
             game,
@@ -543,6 +607,12 @@ private fun PodiumSlot(game: Game, rank: Int, order: Int, soundManager: SoundMan
     val coverH = when (rank) { 1 -> 104.dp; 2 -> 84.dp; else -> 74.dp }
     var focused by remember { mutableStateOf(false) }
     val fscale by animateFloatAsState(if (focused) 1.06f else 1f, tween(150), label = "pod_s")
+    // Medalha do ouro respira — o #1 chama atenção o tempo todo
+    val medalPulse by rememberInfiniteTransition(label = "mp").animateFloat(
+        initialValue = 0.7f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse),
+        label = "mp_a"
+    )
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -556,7 +626,7 @@ private fun PodiumSlot(game: Game, rank: Int, order: Int, soundManager: SoundMan
             .clickable { onClick() }
             .padding(7.dp)
     ) {
-        Text("${rank}º", color = medal, fontSize = if (rank == 1) 22.sp else 18.sp, fontWeight = FontWeight.Black)
+        Text("${rank}º", color = medal.copy(alpha = if (rank == 1) medalPulse else 0.95f), fontSize = if (rank == 1) 22.sp else 18.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(4.dp))
         GameCover(game, Modifier.fillMaxWidth().height(coverH).clip(RoundedCornerShape(6.dp)))
         Spacer(Modifier.height(4.dp))

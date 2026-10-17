@@ -13,6 +13,7 @@ object UbikaSocket {
 
     private var mSocket: Socket? = null
     private var progressListener: ((JSONObject) -> Unit)? = null
+    private var controllerListener: ((JSONObject) -> Unit)? = null
     private var userId: String = ""
     private var clientRes: Triple<Int, Int, Int>? = null // width, height, fps do aparelho
 
@@ -52,9 +53,14 @@ object UbikaSocket {
                 val obj = args.firstOrNull() as? JSONObject ?: return@on
                 if (obj.optBoolean("online")) announceClient()
             }
-            // Reaplica listener registrado antes do socket existir/reconectar
+            // Reaplica listeners registrados antes do socket existir/reconectar
             progressListener?.let { l ->
                 mSocket?.on("download_progress") { args ->
+                    (args.firstOrNull() as? JSONObject)?.let(l)
+                }
+            }
+            controllerListener?.let { l ->
+                mSocket?.on("controller_event") { args ->
                     (args.firstOrNull() as? JSONObject)?.let(l)
                 }
             }
@@ -151,6 +157,17 @@ object UbikaSocket {
         mSocket?.off("download_progress")
         if (listener != null) {
             mSocket?.on("download_progress") { args ->
+                (args.firstOrNull() as? JSONObject)?.let(listener)
+            }
+        }
+    }
+
+    /** Listener de plug/desplug do controle no PC (handoff GameSir). */
+    fun setControllerEventListener(listener: ((JSONObject) -> Unit)?) {
+        controllerListener = listener
+        mSocket?.off("controller_event")
+        if (listener != null) {
+            mSocket?.on("controller_event") { args ->
                 (args.firstOrNull() as? JSONObject)?.let(listener)
             }
         }
