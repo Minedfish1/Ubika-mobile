@@ -171,7 +171,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
             } else {
                 LazyColumn(
                     state = listState,
-                    verticalArrangement = Arrangement.spacedBy(32.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
 
@@ -180,7 +180,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                         if (trending.isNotEmpty()) {
                             item {
                                 Column {
-                                    Text("MAIS JOGADOS DA SEMANA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("MAIS JOGADOS DA SEMANA", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(12.dp))
                                     PodiumRow(trending.take(3)) { game ->
                                         soundManager.playClickA(); expandedGame = game; selectedVersion = null
@@ -189,15 +189,15 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             }
                             item {
                                 Column {
-                                    Text("EM ALTA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("EM ALTA", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         itemsIndexed(trending.drop(3)) { index, game ->
                                             AnimatedEntry(index) {
-                                                Column(modifier = Modifier.width(110.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
-                                                    GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)))
+                                                Column(modifier = Modifier.width(84.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
+                                                    GameCover(game, Modifier.fillMaxWidth().height(112.dp).clip(RoundedCornerShape(6.dp)))
                                                     Spacer(modifier = Modifier.height(6.dp))
-                                                    Text(game.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                                    Text(game.title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                                 }
                                             }
                                         }
@@ -211,15 +211,15 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             if (gg.isEmpty()) return@forEach
                             item {
                                 Column {
-                                    Text("$genreLabel EM ALTA", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("$genreLabel EM ALTA", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         itemsIndexed(gg) { index, game ->
                                             AnimatedEntry(index) {
-                                                Column(modifier = Modifier.width(110.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
-                                                    GameCover(game, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)))
+                                                Column(modifier = Modifier.width(84.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
+                                                    GameCover(game, Modifier.fillMaxWidth().height(112.dp).clip(RoundedCornerShape(6.dp)))
                                                     Spacer(modifier = Modifier.height(6.dp))
-                                                    Text(game.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                                    Text(game.title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                                 }
                                             }
                                         }
@@ -237,7 +237,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     } else {
                         // --- MODO BUSCA: resultados em lista vertical ---
                         item {
-                            Text("RESULTADOS ($totalResults)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("RESULTADOS ($totalResults)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         itemsIndexed(allGames) { index, game ->
@@ -285,13 +285,13 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
-                        modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f).border(1.dp, Color(0xFF512DA8).copy(alpha = 0.6f), RoundedCornerShape(20.dp)).clickable(enabled = false) {},
-                        shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0510))
+                        modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f).border(1.dp, Color(0xFF512DA8).copy(alpha = 0.6f), RoundedCornerShape(16.dp)).clickable(enabled = false) {},
+                        shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0510))
                     ) {
-                        Row(modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510)))).padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510)))).padding(12.dp)) {
 
                             // COLUNA ESQUERDA: capa (poster 2:3) — não engole a tela
-                            GameCover(game, Modifier.width(150.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(12.dp)))
+                            GameCover(game, Modifier.width(120.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(10.dp)))
 
                             Spacer(modifier = Modifier.width(16.dp))
 
@@ -442,23 +442,23 @@ private fun PodiumSlot(game: Game, rank: Int, order: Int, modifier: Modifier, on
     val rise by animateDpAsState(if (visible) 0.dp else 44.dp, tween(500), label = "pod_r")
 
     val medal = medalByRank[rank] ?: Color.Gray
-    val coverH = when (rank) { 1 -> 148.dp; 2 -> 116.dp; else -> 102.dp }
+    val coverH = when (rank) { 1 -> 104.dp; 2 -> 84.dp; else -> 74.dp }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .graphicsLayer { this.alpha = alpha; translationY = rise.toPx() }
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF140822))
-            .border(1.5.dp, medal.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+            .border(1.5.dp, medal.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(10.dp)
+            .padding(7.dp)
     ) {
-        Text("${rank}º", color = medal, fontSize = if (rank == 1) 30.sp else 24.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.height(6.dp))
-        GameCover(game, Modifier.fillMaxWidth().height(coverH).clip(RoundedCornerShape(8.dp)))
-        Spacer(Modifier.height(6.dp))
-        Text(game.title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+        Text("${rank}º", color = medal, fontSize = if (rank == 1) 22.sp else 18.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(4.dp))
+        GameCover(game, Modifier.fillMaxWidth().height(coverH).clip(RoundedCornerShape(6.dp)))
+        Spacer(Modifier.height(4.dp))
+        Text(game.title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
