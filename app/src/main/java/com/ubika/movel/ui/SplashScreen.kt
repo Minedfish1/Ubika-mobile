@@ -28,34 +28,35 @@ import kotlinx.coroutines.delay
 
 /**
  * Splash estilo Steam Big Picture, releitura Ubika:
- * os grips da manete telescópica deslizam das bordas e TRAVAM com snap
- * mecânico → o trilho se desenha → o U despenca no berço (a "vaga do celular")
- * → pulso de energia liga o conjunto → wordmark expande tracking.
+ * as duas metades da manete telescópica deslizam das bordas e TRAVAM →
+ * os botões acendem em sequência (power-on) → o trilho se desenha →
+ * o U despenca no berço central → pulso + wordmark expande tracking.
  */
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
     var phase by remember { mutableIntStateOf(-1) }
-    // -1 vazio | 0 grips deslizam | 1 trilho desenha | 2 U cai no berço | 3 pulso + wordmark | 4 saída
+    // -1 vazio | 0 metades travam | 1 botões acendem | 2 trilho + U | 3 pulso + wordmark | 4 saída
 
-    // Grips entram rápido e travam com leve overshoot — encaixe mecânico
     val gripIn by animateFloatAsState(
         targetValue = if (phase >= 0) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
         label = "gripIn"
     )
-    // Trilho inferior da manete se desenha do centro pras pontas
-    val rail by animateFloatAsState(
+    val buttonsIn by animateFloatAsState(
         targetValue = if (phase >= 1) 1f else 0f,
-        animationSpec = tween(550, easing = FastOutSlowInEasing),
+        animationSpec = tween(650, easing = LinearOutSlowInEasing),
+        label = "buttonsIn"
+    )
+    val rail by animateFloatAsState(
+        targetValue = if (phase >= 2) 1f else 0f,
+        animationSpec = tween(450, easing = FastOutSlowInEasing),
         label = "rail"
     )
-    // O U cai de cima e ASSENTA no berço — o momento "chave vira" do Big Picture
     val uDrop by animateFloatAsState(
         targetValue = if (phase >= 2) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
         label = "uDrop"
     )
-    // Pulso de energia: anel expande uma vez (power-on)
     val pulse by animateFloatAsState(
         targetValue = if (phase >= 3) 1f else 0f,
         animationSpec = tween(800, easing = FastOutSlowInEasing),
@@ -74,13 +75,13 @@ fun SplashScreen(onFinished: () -> Unit) {
 
     LaunchedEffect(Unit) {
         phase = 0
-        delay(700)   // grips travam
+        delay(750)   // metades travam
         phase = 1
-        delay(420)   // trilho
+        delay(700)   // botões acendem
         phase = 2
-        delay(800)   // U assenta
+        delay(750)   // trilho + U assenta
         phase = 3
-        delay(1150)  // pulso + wordmark
+        delay(1100)  // pulso + wordmark
         phase = 4
         delay(440)
         onFinished()
@@ -100,7 +101,6 @@ fun SplashScreen(onFinished: () -> Unit) {
             ) { onFinished() },
         contentAlignment = Alignment.Center
     ) {
-        // ---------- Manete telescópica (Canvas) ----------
         Canvas(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -111,22 +111,28 @@ fun SplashScreen(onFinished: () -> Unit) {
             val w = size.width
             val h = size.height
             val purple = UbikaPurple
-            val dark = Color(0xFF140822)
+            val dark = Color(0xFF0B0614)
             val edge = Color(0xFF2E1760)
 
-            // Geometria dos grips: blocos laterais com "cara" inclinada
-            val gripW = 0.135f * w
-            val gripH = 0.62f * h
-            val gripY = 0.19f * h
-            val leftX = 0.055f * w
-            val rightX = 0.945f * w - gripW
-            val r = 14.dp.toPx()
+            // ---- Geometria (mesma do ícone, em frações) ----
+            val bodyW = 0.155f * w
+            val bodyH = 0.42f * h
+            val bodyY = 0.20f * h
+            val leftX = 0.045f * w
+            val rightX = 0.955f * w - bodyW
+            val bodyR = 12.dp.toPx()
+            val lobeR = 0.062f * w
+            val lobeY = 0.74f * h
 
-            // Grips deslizam de fora da tela → posição final com snap
-            val lIn = leftX - (1f - gripIn) * (leftX + gripW + 40.dp.toPx())
-            val rIn = rightX + (1f - gripIn) * (w - rightX + 40.dp.toPx())
+            // Metades deslizam de fora da tela → posição final com snap
+            val lIn = leftX - (1f - gripIn) * (leftX + bodyW + lobeR + 30.dp.toPx())
+            val rIn = rightX + (1f - gripIn) * (w - rightX + lobeR + 30.dp.toPx())
+            val lCx = lIn + bodyW / 2f          // centro do corpo esquerdo
+            val rCx = rIn + bodyW / 2f          // centro do corpo direito
+            val lLobeX = lIn + 0.10f * bodyW    // lobo do grip: base externa
+            val rLobeX = rIn + 0.90f * bodyW
 
-            // Glow radial central quando montado (ambiente Big Picture)
+            // Glow radial quando montado
             if (uDrop > 0.5f) {
                 val gl = (uDrop - 0.5f) * 2f
                 drawCircle(
@@ -140,70 +146,86 @@ fun SplashScreen(onFinished: () -> Unit) {
                 )
             }
 
-            // Grip esquerdo
-            drawRoundRect(
-                color = dark, topLeft = Offset(lIn, gripY),
-                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r)
-            )
-            drawRoundRect(
-                color = edge, topLeft = Offset(lIn, gripY),
-                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r),
-                style = Stroke(width = 2.dp.toPx())
-            )
-            // Grip direito
-            drawRoundRect(
-                color = dark, topLeft = Offset(rIn, gripY),
-                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r)
-            )
-            drawRoundRect(
-                color = edge, topLeft = Offset(rIn, gripY),
-                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r),
-                style = Stroke(width = 2.dp.toPx())
-            )
-            // detalhe lateral nos grips (botão/ombro) — acende quando trava
-            val accent = purple.copy(alpha = 0.35f + 0.65f * gripIn)
-            drawRoundRect(
-                color = accent, topLeft = Offset(lIn + gripW - 4.dp.toPx(), gripY + 8.dp.toPx()),
-                size = Size(2.5.dp.toPx(), gripH - 16.dp.toPx()), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-            )
-            drawRoundRect(
-                color = accent, topLeft = Offset(rIn + 1.5.dp.toPx(), gripY + 8.dp.toPx()),
-                size = Size(2.5.dp.toPx(), gripH - 16.dp.toPx()), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-            )
-
-            // Trilho inferior: barra telescópica que se desenha do centro pras laterais
-            if (rail > 0.01f) {
-                val railY = gripY + gripH - 10.dp.toPx()
-                val railHalf = (0.5f * w - leftX) * rail
+            // ---- Corpos + lobos dos grips ----
+            for ((bx, lx) in listOf(lIn to lLobeX, rIn to rLobeX)) {
                 drawRoundRect(
-                    color = edge,
+                    color = dark, topLeft = Offset(bx, bodyY),
+                    size = Size(bodyW, bodyH), cornerRadius = CornerRadius(bodyR, bodyR)
+                )
+                drawRoundRect(
+                    color = edge, topLeft = Offset(bx, bodyY),
+                    size = Size(bodyW, bodyH), cornerRadius = CornerRadius(bodyR, bodyR),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+                drawCircle(color = dark, radius = lobeR, center = Offset(lx, lobeY))
+                drawCircle(
+                    color = edge, radius = lobeR, center = Offset(lx, lobeY),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
+
+            // ---- Botões acendem em sequência (pop escalonado) ----
+            // janela de 6 slots: stick L, dpad L, Y X B A (losango), stick R
+            fun slot(i: Int): Float = ((buttonsIn * 6f) - i).coerceIn(0f, 1f)
+            val stickR = 0.030f * w
+            val dotR = 0.017f * w
+
+            // Stick esquerdo (donut) — slot 0
+            run {
+                val t = slot(0); if (t > 0f) {
+                    val c = Offset(lCx, bodyY + bodyH * 0.28f)
+                    drawCircle(color = purple.copy(alpha = t), radius = stickR * t, center = c)
+                    drawCircle(color = dark, radius = stickR * 0.45f * t, center = c)
+                }
+            }
+            // Dpad esquerdo (cruz) — slot 1
+            run {
+                val t = slot(1); if (t > 0f) {
+                    val c = Offset(lCx, bodyY + bodyH * 0.66f)
+                    val arm = 0.030f * w * t
+                    val th = 0.014f * w * t
+                    drawRoundRect(color = purple.copy(alpha = t),
+                        topLeft = Offset(c.x - th / 2, c.y - arm), size = Size(th, arm * 2),
+                        cornerRadius = CornerRadius(th / 2, th / 2))
+                    drawRoundRect(color = purple.copy(alpha = t),
+                        topLeft = Offset(c.x - arm, c.y - th / 2), size = Size(arm * 2, th),
+                        cornerRadius = CornerRadius(th / 2, th / 2))
+                }
+            }
+            // Losango ABXY direito — slots 2..5
+            val btnC = Offset(rCx, bodyY + bodyH * 0.30f)
+            val btnOff = 0.035f * w
+            listOf(
+                Offset(0f, -btnOff), Offset(btnOff, 0f),
+                Offset(0f, btnOff), Offset(-btnOff, 0f)
+            ).forEachIndexed { i, off ->
+                val t = slot(2 + i); if (t > 0f)
+                    drawCircle(color = purple.copy(alpha = t), radius = dotR * t, center = btnC + off)
+            }
+            // Stick direito (donut) — slot 5
+            run {
+                val t = slot(5); if (t > 0f) {
+                    val c = Offset(rCx, bodyY + bodyH * 0.68f)
+                    drawCircle(color = purple.copy(alpha = t), radius = stickR * t, center = c)
+                    drawCircle(color = dark, radius = stickR * 0.45f * t, center = c)
+                }
+            }
+
+            // ---- Trilho telescópico: desenha do centro pras laterais ----
+            if (rail > 0.01f) {
+                val railY = bodyY + bodyH * 0.78f
+                val railHalf = (rCx - lCx) * rail / 2f
+                drawRoundRect(
+                    color = dark,
                     topLeft = Offset(0.5f * w - railHalf, railY),
-                    size = Size(railHalf * 2, 5.dp.toPx()),
+                    size = Size(railHalf * 2, 6.dp.toPx()),
                     cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
                 )
             }
 
-            // Berço central (onde o celular encaixa): colunas laterais finas
-            if (rail > 0.5f) {
-                val crA = (rail - 0.5f) * 2f
-                val crW = 0.19f * w
-                val crH = 0.40f * h
-                val crY = 0.24f * h
-                drawRoundRect(
-                    color = purple.copy(alpha = 0.55f * crA),
-                    topLeft = Offset(0.5f * w - crW / 2 - crW / 2.6f, crY),
-                    size = Size(2.5.dp.toPx(), crH), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-                )
-                drawRoundRect(
-                    color = purple.copy(alpha = 0.55f * crA),
-                    topLeft = Offset(0.5f * w + crW / 2 + crW / 2.6f - 2.5.dp.toPx(), crY),
-                    size = Size(2.5.dp.toPx(), crH), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-                )
-            }
-
-            // Pulso de energia — anel que expande uma vez quando o U assenta
+            // ---- Pulso de energia quando o U assenta ----
             if (pulse in 0.01f..0.99f) {
-                val pr = pulse * 0.75f * w
+                val pr = pulse * 0.72f * w
                 drawCircle(
                     color = purple.copy(alpha = (1f - pulse) * 0.45f),
                     radius = pr,
@@ -216,15 +238,14 @@ fun SplashScreen(onFinished: () -> Unit) {
         // ---------- U caindo no berço ----------
         Text(
             text = "U",
-            fontSize = 64.sp,
+            fontSize = 60.sp,
             fontWeight = FontWeight.Black,
             fontFamily = OrbitronFamily,
-            color = UbikaPurple,
+            color = Color(0xFFE6DEFA),
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = (-16).dp)
+                .offset(y = (-20).dp)
                 .graphicsLayer {
-                    // de cima da tela → centro do berço, com assentar (spring)
                     translationY = (1f - uDrop) * (-180.dp.toPx())
                     val s = 0.9f + 0.1f * uDrop
                     scaleX = s; scaleY = s
