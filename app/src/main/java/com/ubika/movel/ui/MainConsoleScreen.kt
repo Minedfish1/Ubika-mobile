@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
@@ -183,16 +185,10 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
                     ) { searchActive ->
                         if (searchActive) {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
+                                PadField(
                                     value = globalSearchQuery,
-                                    onValueChange = { globalSearchQuery = it },
-                                    placeholder = { Text("Pesquisar...", color = Color.Gray) },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = Color(0xFF140822), unfocusedContainerColor = Color(0xFF140822),
-                                        focusedBorderColor = Color(0xFF7C4DFF), unfocusedBorderColor = Color.Transparent,
-                                        focusedTextColor = Color.White, unfocusedTextColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
+                                    onValue = { globalSearchQuery = it },
+                                    hint = "Pesquisar...",
                                     modifier = Modifier.weight(1f).height(50.dp)
                                 )
                                 IconButton(onClick = { isSearchActive = false; globalSearchQuery = "" }) {
@@ -333,6 +329,7 @@ fun LibraryHubContent(soundManager: SoundManager, onGameSelected: (Game) -> Unit
     var installed by remember { mutableStateOf<List<com.ubika.movel.network.InstalledGame>>(emptyList()) }
     var pcOnline by remember { mutableStateOf<Boolean?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var actionGame by remember { mutableStateOf<com.ubika.movel.network.InstalledGame?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -376,8 +373,8 @@ fun LibraryHubContent(soundManager: SoundManager, onGameSelected: (Game) -> Unit
                                 RoundedCornerShape(14.dp)
                             )
                             .focusable()
-                            .onFocusChanged { focused = it.isFocused }
-                            .clickable { soundManager.playClickA() }
+                            .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
+                            .clickable { soundManager.playClickA(); actionGame = g }
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -385,6 +382,169 @@ fun LibraryHubContent(soundManager: SoundManager, onGameSelected: (Game) -> Unit
                         Text(g.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 2)
                         Text("${"%.1f".format(g.sizeBytes / 1e9)} GB • instalado", color = Color.Gray, fontSize = 12.sp)
                         Text(g.savePath, color = Color.DarkGray, fontSize = 10.sp, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+
+    actionGame?.let { g ->
+        GameActionsSheet(
+            game = g,
+            soundManager = soundManager,
+            onClose = { actionGame = null },
+            onDeleted = { actionGame = null; installed = installed.filter { it.id != g.id } }
+        )
+    }
+}
+
+/**
+ * Ações do jogo instalado: JOGAR, resolução/fps/bitrate específicos
+ * (salvos no PC, aplicados ao abrir) e APAGAR com confirmação.
+ * Tudo focável — navega por D-pad, A confirma, B fecha.
+ */
+@Composable
+private fun GameActionsSheet(
+    game: com.ubika.movel.network.InstalledGame,
+    soundManager: SoundManager,
+    onClose: () -> Unit,
+    onDeleted: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var busy by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var resW by remember { mutableIntStateOf(game.resWidth) }
+    var resH by remember { mutableIntStateOf(game.resHeight) }
+    var fpsSel by remember { mutableIntStateOf(game.fps) }
+    var brSel by remember { mutableIntStateOf(game.bitrate) }
+    var savedMsg by remember { mutableStateOf(false) }
+
+    fun saveCfg() {
+        scope.launch {
+            UbikaApi.sendPcCommand("config_jogo", mapOf(
+                "installId" to game.id,
+                "settings" to mapOf("width" to resW, "height" to resH, "fps" to fpsSel, "bitrate" to brSel)
+            ))
+            savedMsg = true
+        }
+    }
+
+    @Composable
+    fun chip(label: String, selected: Boolean, onSel: () -> Unit) {
+        var f by remember { mutableStateOf(false) }
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (selected) Color(0xFF7C4DFF) else Color(0xFF140822))
+                .border(if (f) 2.dp else 1.dp, if (f) Color.White else if (selected) Color(0xFF9575CD) else Color(0xFF311B52), RoundedCornerShape(8.dp))
+                .onFocusChanged { if (it.isFocused && !f) soundManager.playFocusTick(); f = it.isFocused }
+                .focusable()
+                .clickable { soundManager.playSelect(); onSel(); saveCfg() }
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) { Text(label, color = if (selected) Color.White else Color(0xFFD1C4E9), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+    }
+
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable { onClose() }, contentAlignment = Alignment.Center) {
+            Card(
+                modifier = Modifier.fillMaxWidth(0.82f).border(1.dp, Color(0xFF512DA8), RoundedCornerShape(16.dp)).clickable(enabled = false) {},
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0510))
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(game.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f), maxLines = 1)
+                        TextButton(onClick = { onClose() }, contentPadding = PaddingValues(0.dp)) {
+                            Text("✕", color = Color(0xFFB39DDB), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // JOGAR
+                    var playF by remember { mutableStateOf(false) }
+                    Button(
+                        onClick = {
+                            soundManager.playClickA(); busy = true
+                            scope.launch {
+                                // Res/fps por jogo o PC já aplica via manifest (anexa o
+                                // display virtual na res certa). Aqui só alinhamos as prefs
+                                // locais de stream (bitrate/fps lidos pela aba Stream).
+                                val sp = context.getSharedPreferences("ubika_stream", android.content.Context.MODE_PRIVATE)
+                                sp.edit()
+                                    .putInt("bitrate", if (brSel > 0) brSel else sp.getInt("bitrate", 20))
+                                    .putInt("fps", if (fpsSel > 0) fpsSel else 60)
+                                    .putString("resolution", if (resW > 0) "${resW}x${resH}" else "Nativo")
+                                    .apply()
+                                val r = UbikaApi.sendPcCommand("launch_game", mapOf("installId" to game.id))
+                                busy = false
+                                android.widget.Toast.makeText(context,
+                                    if (r.bool("ok")) "Iniciando no PC…" else "Falhou: ${r.str("error") ?: "?"}",
+                                    android.widget.Toast.LENGTH_LONG).show()
+                                if (r.bool("ok")) onClose()
+                            }
+                        },
+                        enabled = game.playable && !busy,
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                            .onFocusChanged { if (it.isFocused && !playF) soundManager.playFocusTick(); playF = it.isFocused }
+                            .border(if (playF) 2.5.dp else 0.dp, Color.White, RoundedCornerShape(10.dp)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), disabledContainerColor = Color(0xFF14301B)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) { Text(if (busy) "INICIANDO…" else "▶ JOGAR", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp) }
+
+                    // RESOLUÇÃO
+                    Text("RESOLUÇÃO AO JOGAR", color = Color(0xFFB39DDB), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        chip("AUTO (CELULAR)", resW == 0) { resW = 0; resH = 0 }
+                        chip("720p", resW == 1280) { resW = 1280; resH = 720 }
+                        chip("1080p", resW == 1920) { resW = 1920; resH = 1080 }
+                        chip("1440p", resW == 2560) { resW = 2560; resH = 1440 }
+                    }
+
+                    // FPS
+                    Text("FPS", color = Color(0xFFB39DDB), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        chip("AUTO", fpsSel == 0) { fpsSel = 0 }
+                        chip("60", fpsSel == 60) { fpsSel = 60 }
+                        chip("90", fpsSel == 90) { fpsSel = 90 }
+                        chip("120", fpsSel == 120) { fpsSel = 120 }
+                    }
+
+                    // BITRATE
+                    Text("BITRATE DO STREAM", color = Color(0xFFB39DDB), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        chip("AUTO", brSel == 0) { brSel = 0 }
+                        chip("10M", brSel == 10) { brSel = 10 }
+                        chip("20M", brSel == 20) { brSel = 20 }
+                        chip("35M", brSel == 35) { brSel = 35 }
+                        chip("50M", brSel == 50) { brSel = 50 }
+                    }
+                    if (savedMsg) Text("✓ Preferências salvas no PC", color = Color(0xFF66BB6A), fontSize = 10.sp)
+
+                    // APAGAR — dois toques pra confirmar
+                    var delF by remember { mutableStateOf(false) }
+                    Button(
+                        onClick = {
+                            if (!confirmDelete) { soundManager.playSelect(); confirmDelete = true; return@Button }
+                            soundManager.playBack(); busy = true
+                            scope.launch {
+                                val r = UbikaApi.sendPcCommand("excluir_jogo", mapOf("installId" to game.id))
+                                busy = false
+                                if (r.bool("ok")) onDeleted()
+                                else { confirmDelete = false; android.widget.Toast.makeText(context, "Falhou: ${r.str("error") ?: "?"}", android.widget.Toast.LENGTH_LONG).show() }
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                            .onFocusChanged { if (it.isFocused && !delF) soundManager.playFocusTick(); delF = it.isFocused }
+                            .border(if (delF) 2.5.dp else 0.dp, Color.White, RoundedCornerShape(10.dp)),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (confirmDelete) Color(0xFFB71C1C) else Color(0xFF3A0D10)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            if (confirmDelete) "⚠ APAGAR DE VEZ? ${"%.1f".format(game.sizeBytes / 1e9)} GB — A CONFIRMA" else "🗑 APAGAR JOGO",
+                            color = if (confirmDelete) Color.White else Color(0xFFEF5350),
+                            fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp
+                        )
                     }
                 }
             }

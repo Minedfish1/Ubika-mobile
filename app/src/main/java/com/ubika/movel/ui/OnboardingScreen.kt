@@ -95,8 +95,8 @@ private fun AuthStep(onAuth: (token: String, userId: String, plan: String) -> Un
             color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black
         )
 
-        UbikaField(value = email, onValue = { email = it }, hint = "E-mail", keyboard = KeyboardType.Email)
-        UbikaField(value = password, onValue = { password = it }, hint = "Senha (mín. 6)", keyboard = KeyboardType.Password, password = true)
+        PadField(value = email, onValue = { email = it }, hint = "E-mail", modifier = Modifier.fillMaxWidth())
+        PadField(value = password, onValue = { password = it }, hint = "Senha (mín. 6)", password = true, modifier = Modifier.fillMaxWidth())
 
         error?.let { Text(it, color = Color(0xFFEF5350), fontSize = 13.sp) }
 
@@ -242,20 +242,14 @@ private fun PairStep(onDone: () -> Unit) {
             color = Color.Gray, fontSize = 13.sp, textAlign = TextAlign.Center, lineHeight = 19.sp
         )
 
-        OutlinedTextField(
+        PadField(
             value = code,
-            onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) code = it },
-            placeholder = { Text("000000", color = Color.DarkGray) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            textStyle = LocalTextStyle.current.copy(
-                color = Color.White, fontSize = 28.sp,
-                fontWeight = FontWeight.Black, letterSpacing = 8.sp, textAlign = TextAlign.Center
-            ),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = UbikaPurple, unfocusedBorderColor = Color(0xFF512DA8),
-                focusedContainerColor = Color(0xFF140822), unfocusedContainerColor = Color(0xFF140822)
-            ),
+            onValue = { code = it },
+            hint = "000000",
+            digitsOnly = true,
+            maxLen = 6,
+            center = true,
+            bigText = true,
             modifier = Modifier.width(240.dp)
         )
 
@@ -292,24 +286,6 @@ private fun PairStep(onDone: () -> Unit) {
 }
 
 // ---------- Componentes ----------
-@Composable
-private fun UbikaField(value: String, onValue: (String) -> Unit, hint: String, keyboard: KeyboardType, password: Boolean = false) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValue,
-        placeholder = { Text(hint, color = Color.DarkGray) },
-        singleLine = true,
-        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = UbikaPurple, unfocusedBorderColor = Color(0xFF512DA8),
-            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-            focusedContainerColor = Color(0xFF140822), unfocusedContainerColor = Color(0xFF140822)
-        ),
-        modifier = Modifier.fillMaxWidth()
-    )
-}
-
 @Composable
 private fun UbikaButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     Box(

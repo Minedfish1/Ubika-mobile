@@ -280,6 +280,11 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
             gameToDisplay?.let { game ->
                 val context = LocalContext.current
                 LaunchedEffect(game.id) { soundManager.playOpen() }
+                // Expansão: capa desliza da esquerda (spring), conteúdo sobe — staggered interno
+                var opened by remember(game.id) { mutableStateOf(false) }
+                LaunchedEffect(game.id) { opened = true }
+                val coverIn by animateFloatAsState(if (opened) 1f else 0f, spring(dampingRatio = 0.72f, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow), label = "cover_in")
+                val bodyIn by animateFloatAsState(if (opened) 1f else 0f, tween(420, delayMillis = 90, easing = FastOutSlowInEasing), label = "body_in")
                 // Auto-seleciona a primeira fonte baixável — A no controle já baixa direto
                 LaunchedEffect(game.id) {
                     if (selectedVersion == null) {
@@ -298,13 +303,29 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     ) {
                         Row(modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF180A2B), Color(0xFF0A0510)))).padding(12.dp)) {
 
-                            // COLUNA ESQUERDA: capa (poster 2:3) — não engole a tela
-                            GameCover(game, Modifier.width(120.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp)).border(1.dp, Color(0xFF4A148C), RoundedCornerShape(10.dp)))
+                            // COLUNA ESQUERDA: capa (poster 2:3) — desliza de fora
+                            GameCover(
+                                game,
+                                Modifier
+                                    .width(120.dp)
+                                    .fillMaxHeight()
+                                    .graphicsLayer {
+                                        translationX = (1f - coverIn) * (-70).dp.toPx()
+                                        alpha = coverIn
+                                        val s = 0.92f + 0.08f * coverIn
+                                        scaleX = s; scaleY = s
+                                    }
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(1.dp, Color(0xFF4A148C), RoundedCornerShape(10.dp))
+                            )
 
                             Spacer(modifier = Modifier.width(16.dp))
 
-                            // COLUNA DIREITA: tudo que interessa + baixar
-                            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            // COLUNA DIREITA: tudo que interessa + baixar — sobe depois da capa
+                            Column(modifier = Modifier.weight(1f).fillMaxHeight().graphicsLayer {
+                                translationY = (1f - bodyIn) * 36.dp.toPx()
+                                alpha = bodyIn
+                            }) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, modifier = Modifier.weight(1f))
                                     TextButton(onClick = { soundManager.playBack(); expandedGame = null }, contentPadding = PaddingValues(0.dp)) {
@@ -325,7 +346,22 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                         Text(game.requirementsOrDefault(), color = Color.Gray, fontSize = 10.sp, lineHeight = 14.sp)
                                     }
 
-                                    // fontes (rolagem, foco p/ manete)
+                                    // fontes (rolagem, foco p/ manete) — escondidas quando já instalado
+                                    if (game.installed == true) {
+                                        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                            Text("STATUS", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF14301B)).border(1.dp, Color(0xFF4CAF50), RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                                Text("✓ INSTALADO NO PC", color = Color(0xFF66BB6A), fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                                            }
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Text(
+                                                if (game.playable == true) "Pronto pra jogar — iniciar liga o stream na resolução deste aparelho."
+                                                else "Instalado, mas o executável não foi localizado automaticamente.",
+                                                color = Color.Gray, fontSize = 10.sp, lineHeight = 14.sp
+                                            )
+                                        }
+                                    } else {
                                     Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                                         Text("FONTE", color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(6.dp))
@@ -341,7 +377,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                                     .background(if (isSelected) Color(0xFF512DA8) else Color(0xFF140822))
                                                     .border(
                                                         if (isSelected || focused) 2.dp else 1.dp,
-                                                        if (isSelected) Color(0xFF9575CD) else if (focused) Color(0xFFB39DDB) else Color(0xFF311B52),
+                                                        if (isSelected) Color(0xFF9575CD) else if (focused) Color.White else Color(0xFF311B52),
                                                         RoundedCornerShape(8.dp)
                                                     )
                                                     .onFocusChanged { focused = it.isFocused }
@@ -359,13 +395,47 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                             }
                                         }
                                     }
+                                    }
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 val sel = selectedVersion
                                 var sending by remember { mutableStateOf(false) }
+                                if (game.installed == true) {
+                                    var playFocused by remember { mutableStateOf(false) }
+                                    Button(
+                                        onClick = {
+                                            soundManager.playClickA()
+                                            sending = true
+                                            coroutineScope.launch {
+                                                try {
+                                                    val r = UbikaApi.sendPcCommand("launch_game", mapOf("installId" to (game.installId ?: "")))
+                                                    android.widget.Toast.makeText(context,
+                                                        if (r.bool("ok")) "Iniciando no PC — a tela ajusta pra este aparelho" else "PC recusou: ${r.str("error") ?: "?"}",
+                                                        android.widget.Toast.LENGTH_LONG).show()
+                                                    if (r.bool("ok")) expandedGame = null
+                                                } catch (e: Exception) {
+                                                    android.widget.Toast.makeText(context, "Falha: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                }
+                                                sending = false
+                                            }
+                                        },
+                                        enabled = !sending && game.playable == true,
+                                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                                            .onFocusChanged { if (it.isFocused && !playFocused) soundManager.playFocusTick(); playFocused = it.isFocused }
+                                            .border(if (playFocused) 2.5.dp else 0.dp, if (playFocused) Color.White else Color.Transparent, RoundedCornerShape(10.dp)),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), disabledContainerColor = Color(0xFF14301B)),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(
+                                            if (sending) "INICIANDO…" else "▶ JOGAR",
+                                            color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp
+                                        )
+                                    }
+                                } else {
                                 val canDownload = sel != null && !sending && (sel.magnetOrEmpty().isNotBlank() || sel.linksOrEmpty().isNotEmpty())
+                                var dlFocused by remember { mutableStateOf(false) }
                                 Button(
                                     onClick = {
                                         sel?.let { ver ->
@@ -395,7 +465,9 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                         }
                                     },
                                     enabled = canDownload,
-                                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                                    modifier = Modifier.fillMaxWidth().height(46.dp)
+                                        .onFocusChanged { if (it.isFocused && !dlFocused) soundManager.playFocusTick(); dlFocused = it.isFocused }
+                                        .border(if (dlFocused) 2.5.dp else 0.dp, if (dlFocused) Color.White else Color.Transparent, RoundedCornerShape(10.dp)),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF), disabledContainerColor = Color(0xFF1E0D33)),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
@@ -404,6 +476,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                         color = if (canDownload) Color.White else Color.Gray,
                                         fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp
                                     )
+                                }
                                 }
                             }
                         }
@@ -439,8 +512,8 @@ private fun HeroBanner(game: Game, soundManager: SoundManager, onClick: (Game) -
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(16.dp))
             .border(
-                if (focused) 2.dp else 1.dp,
-                if (focused) Color(0xFF9575CD) else Color(0xFF311B52),
+                if (focused) 2.5.dp else 1.dp,
+                if (focused) Color.White else Color(0xFF311B52),
                 RoundedCornerShape(16.dp)
             )
             .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
@@ -548,7 +621,7 @@ private fun ShelfCard(game: Game, soundManager: SoundManager, onClick: () -> Uni
         animationSpec = infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse),
         label = "gl_a"
     )
-    val glow = if (focused) Color(0xFF9575CD).copy(alpha = glowPulse) else Color(0xFF311B52)
+    val glow = if (focused) Color.White.copy(alpha = glowPulse) else Color(0xFF311B52)
     Column(modifier = Modifier.width(96.dp)) {
         GameCover(
             game,
@@ -558,7 +631,7 @@ private fun ShelfCard(game: Game, soundManager: SoundManager, onClick: () -> Uni
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF140822))
-                .border(if (focused) 2.dp else 1.dp, glow, RoundedCornerShape(10.dp))
+                .border(if (focused) 2.5.dp else 1.dp, glow, RoundedCornerShape(10.dp))
                 .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
                 .focusable()
                 .clickable { onClick() }
@@ -620,7 +693,7 @@ private fun PodiumSlot(game: Game, rank: Int, order: Int, soundManager: SoundMan
             .graphicsLayer { this.alpha = alpha; translationY = rise.toPx(); scaleX = fscale; scaleY = fscale }
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF140822))
-            .border(if (focused) 2.5.dp else 1.5.dp, if (focused) medal else medal.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
+            .border(if (focused) 2.5.dp else 1.5.dp, if (focused) Color.White else medal.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
             .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
             .focusable()
             .clickable { onClick() }

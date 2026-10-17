@@ -8,6 +8,11 @@ data class Game(
     // Gson instancia sem construtor — campos ausentes no JSON chegam null
     // mesmo declarados non-null; trato na UI com ?: default.
     val requirements: String? = null,
+    /** Instalado no PC — o detalhe mostra só JOGAR (não reinstala). */
+    val installed: Boolean? = null,
+    /** Tem executável localizado — habilita o JOGAR de verdade. */
+    val playable: Boolean? = null,
+    val installId: String? = null,
     val versions: List<GameVersion>? = null
 ) {
     fun requirementsOrDefault() = requirements ?: "• SO: Windows 10/11\n• RAM: 8/16 GB\n• DirectX 12\n• GPU dedicada"

@@ -38,6 +38,28 @@ val UbikaPurple = Color(0xFF8A2BE2) // Roxo vibrante (BlueViolet)
 val UbikaPurpleDark = Color(0xFF4B0082)
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Manete navega o app inteiro: A vira DPAD_CENTER (ativa o card/botão
+     * focado — Compose já navega foco com o D-pad), B vira BACK.
+     * Teclado físico e toque continuam funcionando normalmente.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_BUTTON_A -> return super.dispatchKeyEvent(
+                    android.view.KeyEvent(event.downTime, event.eventTime, event.action,
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER, 0)
+                )
+                android.view.KeyEvent.KEYCODE_BUTTON_B -> return super.dispatchKeyEvent(
+                    android.view.KeyEvent(event.downTime, event.eventTime, event.action,
+                        android.view.KeyEvent.KEYCODE_BACK, 0)
+                )
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

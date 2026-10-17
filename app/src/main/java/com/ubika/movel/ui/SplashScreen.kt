@@ -11,11 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -23,43 +23,48 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ubika.movel.UbikaDarkBackground
 import com.ubika.movel.UbikaPurple
+import com.ubika.movel.ui.theme.OrbitronFamily
 import kotlinx.coroutines.delay
 
 /**
- * Animação inicial: "UBIKA" entra, o BIKA se desfaz e a perninha do U
- * desenha a silhueta de uma manete (dois traços que partem do ponto sob o U
- * e se encontram na base). O U então se acomoda dentro da silhueta.
+ * Splash estilo Steam Big Picture, releitura Ubika:
+ * os grips da manete telescópica deslizam das bordas e TRAVAM com snap
+ * mecânico → o trilho se desenha → o U despenca no berço (a "vaga do celular")
+ * → pulso de energia liga o conjunto → wordmark expande tracking.
  */
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
     var phase by remember { mutableIntStateOf(-1) }
-    // -1 = tela vazia | 0 = letras entrando | 1 = BIKA sai | 2 = traço da manete + U desce | 3 = brilho | 4 = saída
+    // -1 vazio | 0 grips deslizam | 1 trilho desenha | 2 U cai no berço | 3 pulso + wordmark | 4 saída
 
-    val lettersIn by animateFloatAsState(
+    // Grips entram rápido e travam com leve overshoot — encaixe mecânico
+    val gripIn by animateFloatAsState(
         targetValue = if (phase >= 0) 1f else 0f,
-        animationSpec = tween(500, easing = FastOutSlowInEasing),
-        label = "lettersIn"
+        animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
+        label = "gripIn"
     )
-    val bikaPull by animateFloatAsState(
+    // Trilho inferior da manete se desenha do centro pras pontas
+    val rail by animateFloatAsState(
         targetValue = if (phase >= 1) 1f else 0f,
-        animationSpec = tween(750, easing = FastOutSlowInEasing),
-        label = "bikaPull"
+        animationSpec = tween(550, easing = FastOutSlowInEasing),
+        label = "rail"
     )
+    // O U cai de cima e ASSENTA no berço — o momento "chave vira" do Big Picture
     val uDrop by animateFloatAsState(
         targetValue = if (phase >= 2) 1f else 0f,
-        // Spring: o U passa levemente do ponto e assenta — efeito "pousar na manete"
-        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow),
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
         label = "uDrop"
     )
-    val padDraw by animateFloatAsState(
-        targetValue = if (phase >= 2) 1f else 0f,
-        animationSpec = tween(1100, delayMillis = 100, easing = FastOutSlowInEasing),
-        label = "padDraw"
-    )
-    val glow by animateFloatAsState(
+    // Pulso de energia: anel expande uma vez (power-on)
+    val pulse by animateFloatAsState(
         targetValue = if (phase >= 3) 1f else 0f,
-        animationSpec = tween(600, easing = LinearEasing),
-        label = "glow"
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "pulse"
+    )
+    val markIn by animateFloatAsState(
+        targetValue = if (phase >= 3) 1f else 0f,
+        animationSpec = tween(650, delayMillis = 200, easing = FastOutSlowInEasing),
+        label = "markIn"
     )
     val exitAlpha by animateFloatAsState(
         targetValue = if (phase >= 4) 0f else 1f,
@@ -69,140 +74,177 @@ fun SplashScreen(onFinished: () -> Unit) {
 
     LaunchedEffect(Unit) {
         phase = 0
-        delay(950)
+        delay(700)   // grips travam
         phase = 1
-        delay(850)
+        delay(420)   // trilho
         phase = 2
-        delay(1500)
+        delay(800)   // U assenta
         phase = 3
-        delay(900)
+        delay(1150)  // pulso + wordmark
         phase = 4
-        delay(460)
+        delay(440)
         onFinished()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(UbikaDarkBackground)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF0D0616), UbikaDarkBackground, Color(0xFF070310))
+                )
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onFinished() },
         contentAlignment = Alignment.Center
     ) {
-        // Silhueta da manete: dois traços saem do ponto sob o U e se encontram na base
+        // ---------- Manete telescópica (Canvas) ----------
         Canvas(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = 40.dp)
-                .size(width = 300.dp, height = 200.dp)
+                .offset(y = (-14).dp)
+                .size(width = 340.dp, height = 210.dp)
                 .alpha(exitAlpha)
         ) {
-            val stroke = Stroke(width = 4.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             val w = size.width
             val h = size.height
+            val purple = UbikaPurple
+            val dark = Color(0xFF140822)
+            val edge = Color(0xFF2E1760)
 
-            // Metade direita: topo-centro -> ombro -> grip -> cintura inferior
-            val right = Path().apply {
-                moveTo(0.50f * w, 0.10f * h)
-                cubicTo(0.60f * w, 0.06f * h, 0.70f * w, 0.07f * h, 0.76f * w, 0.16f * h)
-                cubicTo(0.84f * w, 0.27f * h, 0.92f * w, 0.40f * h, 0.95f * w, 0.55f * h)
-                cubicTo(0.97f * w, 0.63f * h, 0.95f * w, 0.73f * h, 0.88f * w, 0.78f * h)
-                cubicTo(0.81f * w, 0.83f * h, 0.73f * w, 0.80f * h, 0.70f * w, 0.72f * h)
-                cubicTo(0.66f * w, 0.63f * h, 0.62f * w, 0.57f * h, 0.56f * w, 0.55f * h)
-                cubicTo(0.53f * w, 0.545f * h, 0.515f * w, 0.55f * h, 0.50f * w, 0.58f * h)
-            }
-            // Metade esquerda: espelho da direita
-            val left = Path().apply {
-                moveTo(0.50f * w, 0.10f * h)
-                cubicTo(0.40f * w, 0.06f * h, 0.30f * w, 0.07f * h, 0.24f * w, 0.16f * h)
-                cubicTo(0.16f * w, 0.27f * h, 0.08f * w, 0.40f * h, 0.05f * w, 0.55f * h)
-                cubicTo(0.03f * w, 0.63f * h, 0.05f * w, 0.73f * h, 0.12f * w, 0.78f * h)
-                cubicTo(0.19f * w, 0.83f * h, 0.27f * w, 0.80f * h, 0.30f * w, 0.72f * h)
-                cubicTo(0.34f * w, 0.63f * h, 0.38f * w, 0.57f * h, 0.44f * w, 0.55f * h)
-                cubicTo(0.47f * w, 0.545f * h, 0.485f * w, 0.55f * h, 0.50f * w, 0.58f * h)
-            }
+            // Geometria dos grips: blocos laterais com "cara" inclinada
+            val gripW = 0.135f * w
+            val gripH = 0.62f * h
+            val gripY = 0.19f * h
+            val leftX = 0.055f * w
+            val rightX = 0.945f * w - gripW
+            val r = 14.dp.toPx()
 
-            val pmR = PathMeasure().apply { setPath(right, false) }
-            val pmL = PathMeasure().apply { setPath(left, false) }
-            val segR = Path().also { pmR.getSegment(0f, pmR.length * padDraw, it, true) }
-            val segL = Path().also { pmL.getSegment(0f, pmL.length * padDraw, it, true) }
+            // Grips deslizam de fora da tela → posição final com snap
+            val lIn = leftX - (1f - gripIn) * (leftX + gripW + 40.dp.toPx())
+            val rIn = rightX + (1f - gripIn) * (w - rightX + 40.dp.toPx())
 
-            // Brilho: traço largo e translúcido por trás, pulsando no final
-            if (padDraw > 0.02f) {
-                val glowStroke = Stroke(
-                    width = (14f + 6f * glow) * density,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
+            // Glow radial central quando montado (ambiente Big Picture)
+            if (uDrop > 0.5f) {
+                val gl = (uDrop - 0.5f) * 2f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(purple.copy(alpha = 0.22f * gl), Color.Transparent),
+                        center = Offset(0.5f * w, 0.47f * h),
+                        radius = 0.52f * w
+                    ),
+                    radius = 0.52f * w,
+                    center = Offset(0.5f * w, 0.47f * h)
                 )
-                val glowAlpha = 0.10f + 0.16f * glow
-                drawPath(segR, UbikaPurple.copy(alpha = glowAlpha), style = glowStroke)
-                drawPath(segL, UbikaPurple.copy(alpha = glowAlpha), style = glowStroke)
             }
-            drawPath(segR, UbikaPurple, style = stroke)
-            drawPath(segL, UbikaPurple, style = stroke)
 
-            // Fagulha na ponta dos traços enquanto desenham
-            if (padDraw in 0.02f..0.98f) {
-                drawCircle(Color.White, radius = 3.dp.toPx(), center = pmR.getPosition(pmR.length * padDraw))
-                drawCircle(Color.White, radius = 3.dp.toPx(), center = pmL.getPosition(pmL.length * padDraw))
+            // Grip esquerdo
+            drawRoundRect(
+                color = dark, topLeft = Offset(lIn, gripY),
+                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r)
+            )
+            drawRoundRect(
+                color = edge, topLeft = Offset(lIn, gripY),
+                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r),
+                style = Stroke(width = 2.dp.toPx())
+            )
+            // Grip direito
+            drawRoundRect(
+                color = dark, topLeft = Offset(rIn, gripY),
+                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r)
+            )
+            drawRoundRect(
+                color = edge, topLeft = Offset(rIn, gripY),
+                size = Size(gripW, gripH), cornerRadius = CornerRadius(r, r),
+                style = Stroke(width = 2.dp.toPx())
+            )
+            // detalhe lateral nos grips (botão/ombro) — acende quando trava
+            val accent = purple.copy(alpha = 0.35f + 0.65f * gripIn)
+            drawRoundRect(
+                color = accent, topLeft = Offset(lIn + gripW - 4.dp.toPx(), gripY + 8.dp.toPx()),
+                size = Size(2.5.dp.toPx(), gripH - 16.dp.toPx()), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+            )
+            drawRoundRect(
+                color = accent, topLeft = Offset(rIn + 1.5.dp.toPx(), gripY + 8.dp.toPx()),
+                size = Size(2.5.dp.toPx(), gripH - 16.dp.toPx()), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+            )
+
+            // Trilho inferior: barra telescópica que se desenha do centro pras laterais
+            if (rail > 0.01f) {
+                val railY = gripY + gripH - 10.dp.toPx()
+                val railHalf = (0.5f * w - leftX) * rail
+                drawRoundRect(
+                    color = edge,
+                    topLeft = Offset(0.5f * w - railHalf, railY),
+                    size = Size(railHalf * 2, 5.dp.toPx()),
+                    cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                )
+            }
+
+            // Berço central (onde o celular encaixa): colunas laterais finas
+            if (rail > 0.5f) {
+                val crA = (rail - 0.5f) * 2f
+                val crW = 0.19f * w
+                val crH = 0.40f * h
+                val crY = 0.24f * h
+                drawRoundRect(
+                    color = purple.copy(alpha = 0.55f * crA),
+                    topLeft = Offset(0.5f * w - crW / 2 - crW / 2.6f, crY),
+                    size = Size(2.5.dp.toPx(), crH), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+                drawRoundRect(
+                    color = purple.copy(alpha = 0.55f * crA),
+                    topLeft = Offset(0.5f * w + crW / 2 + crW / 2.6f - 2.5.dp.toPx(), crY),
+                    size = Size(2.5.dp.toPx(), crH), cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+            }
+
+            // Pulso de energia — anel que expande uma vez quando o U assenta
+            if (pulse in 0.01f..0.99f) {
+                val pr = pulse * 0.75f * w
+                drawCircle(
+                    color = purple.copy(alpha = (1f - pulse) * 0.45f),
+                    radius = pr,
+                    center = Offset(0.5f * w, 0.47f * h),
+                    style = Stroke(width = (1f - pulse) * 6.dp.toPx() + 1.dp.toPx())
+                )
             }
         }
 
-        // Wordmark: U sobe/acompana o traço; BIKA se desfaz puxado para a direita
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        // ---------- U caindo no berço ----------
+        Text(
+            text = "U",
+            fontSize = 64.sp,
+            fontWeight = FontWeight.Black,
+            fontFamily = OrbitronFamily,
+            color = UbikaPurple,
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = (-95).dp)
-                .alpha(exitAlpha)
-        ) {
-            Text(
-                text = "U",
-                fontSize = 72.sp,
-                fontWeight = FontWeight.Black,
-                color = UbikaPurple,
-                modifier = Modifier.graphicsLayer {
-                    // Sobe ao entrar + cai com spring pra dentro da manete formada
-                    // (115dp = centro visual da silhueta, ~29dp abaixo do centro da tela)
-                    translationY = (1f - lettersIn) * 36.dp.toPx() + uDrop * 115.dp.toPx()
-                    val s = (0.85f + 0.15f * lettersIn) * (1f - 0.45f * uDrop)
-                    scaleX = s
-                    scaleY = s
-                    alpha = lettersIn
+                .offset(y = (-16).dp)
+                .graphicsLayer {
+                    // de cima da tela → centro do berço, com assentar (spring)
+                    translationY = (1f - uDrop) * (-180.dp.toPx())
+                    val s = 0.9f + 0.1f * uDrop
+                    scaleX = s; scaleY = s
+                    alpha = uDrop.coerceIn(0f, 1f) * exitAlpha
                 }
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                listOf("B", "I", "K", "A").forEachIndexed { index, char ->
-                    val enter = (lettersIn * 2.2f - index * 0.35f).coerceIn(0f, 1f)
-                    val letterProgress = (bikaPull * (1f + index * 0.2f)).coerceIn(0f, 1f)
-                    Text(
-                        text = char,
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        modifier = Modifier
-                            .graphicsLayer {
-                                alpha = enter * (1f - letterProgress)
-                                translationX = letterProgress * (120f + index * 80f)
-                            }
-                            .padding(start = 2.dp)
-                    )
-                }
-            }
-        }
+        )
 
+        // ---------- Wordmark: tracking expande (Big Picture) ----------
+        val tracking = (2 + 10 * markIn).sp
         Text(
             text = "UBIKA",
             fontSize = 15.sp,
             fontWeight = FontWeight.Black,
-            letterSpacing = 6.sp,
+            fontFamily = OrbitronFamily,
+            letterSpacing = tracking,
             color = Color.White,
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = 165.dp)
-                .alpha(glow * exitAlpha)
+                .offset(y = 128.dp)
+                .alpha(markIn * exitAlpha)
         )
     }
 }

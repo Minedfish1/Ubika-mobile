@@ -366,19 +366,12 @@ private fun PairRow(soundManager: SoundManager) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            androidx.compose.material3.OutlinedTextField(
+            PadField(
                 value = code,
-                onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) code = it },
-                placeholder = { Text("000000", color = Color.DarkGray) },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword
-                ),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF7C4DFF), unfocusedBorderColor = Color(0xFF512DA8),
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF1E0D33), unfocusedContainerColor = Color(0xFF1E0D33)
-                ),
+                onValue = { code = it },
+                hint = "000000",
+                digitsOnly = true,
+                maxLen = 6,
                 modifier = Modifier.weight(1f).height(52.dp)
             )
             Box(

@@ -124,35 +124,30 @@ fun ProfileSheet(
                 Text(email, color = Color(0xFF8a7fa8), fontSize = 12.sp)
             }
 
-            // Nome de exibição — salva no servidor
-            androidx.compose.material3.OutlinedTextField(
-                value = nameField,
-                onValueChange = { if (it.length <= 40) { nameField = it; nameMsg = null } },
-                placeholder = { Text("Seu nome de exibição", color = Color.DarkGray) },
-                singleLine = true,
-                trailingIcon = {
-                    TextButton(
-                        onClick = {
-                            if (nameField.isBlank() || savingName) return@TextButton
-                            soundManager.playClickA()
-                            savingName = true
-                            scope.launch {
-                                val ok = UbikaApi.updateMe(name = nameField.trim())
-                                savingName = false
-                                if (ok) { onName(nameField.trim()); nameMsg = "Salvo ✓" }
-                                else nameMsg = "Falhou — tente de novo"
-                            }
-                        },
-                        enabled = nameField.isNotBlank() && !savingName
-                    ) { Text(if (savingName) "…" else "SALVAR", color = Color(0xFF7C4DFF), fontSize = 12.sp, fontWeight = FontWeight.Black) }
-                },
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF7C4DFF), unfocusedBorderColor = Color(0xFF512DA8),
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF1E0D33), unfocusedContainerColor = Color(0xFF1E0D33)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
+            // Nome de exibição — salva no servidor (teclado de manete via A)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                PadField(
+                    value = nameField,
+                    onValue = { nameField = it.take(40); nameMsg = null },
+                    hint = "Seu nome de exibição",
+                    maxLen = 40,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = {
+                        if (nameField.isBlank() || savingName) return@TextButton
+                        soundManager.playClickA()
+                        savingName = true
+                        scope.launch {
+                            val ok = UbikaApi.updateMe(name = nameField.trim())
+                            savingName = false
+                            if (ok) { onName(nameField.trim()); nameMsg = "Salvo ✓" }
+                            else nameMsg = "Falhou — tente de novo"
+                        }
+                    },
+                    enabled = nameField.isNotBlank() && !savingName
+                ) { Text(if (savingName) "…" else "SALVAR", color = Color(0xFF7C4DFF), fontSize = 12.sp, fontWeight = FontWeight.Black) }
+            }
             nameMsg?.let { Text(it, color = if (it.endsWith("✓")) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 11.sp) }
 
             PlanRow(plan, planExpiresAt)

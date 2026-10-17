@@ -266,20 +266,24 @@ object UbikaApi {
             } catch (e: Exception) { Log.e(TAG, "updateMe: ${e.message}"); false }
         }
 
-    /** Jogos instalados = downloads concluídos no PC (state == "done"). */
+    /** Jogos instalados no PC (manifesto installs.json — independente da fila de downloads). */
     suspend fun getInstalledGames(): List<InstalledGame> = withContext(Dispatchers.IO) {
         try {
-            val r = sendPcCommand("listar_downloads")
-            val arr = r.obj?.getAsJsonArray("downloads") ?: return@withContext emptyList()
+            val r = sendPcCommand("listar_instalados")
+            val arr = r.obj?.getAsJsonArray("games") ?: return@withContext emptyList()
             arr.mapNotNull { el ->
                 val o = el.asJsonObject
-                if (o.get("state")?.asString != "done") return@mapNotNull null
                 InstalledGame(
-                    id = o.get("id")?.asString ?: "",
-                    name = o.get("gameName")?.asString ?: "Jogo",
-                    sizeBytes = o.get("length")?.asLong ?: 0L,
-                    savePath = o.get("savePath")?.asString ?: "",
-                    finishedAt = o.get("finishedAt")?.asLong ?: 0L
+                    id = o.get("installId")?.asString ?: return@mapNotNull null,
+                    name = o.get("name")?.asString ?: "Jogo",
+                    sizeBytes = o.get("sizeBytes")?.asLong ?: 0L,
+                    savePath = o.get("dir")?.asString ?: "",
+                    finishedAt = 0L,
+                    playable = o.get("playable")?.asBoolean == true,
+                    resWidth = o.getAsJsonObject("settings")?.get("width")?.asInt ?: 0,
+                    resHeight = o.getAsJsonObject("settings")?.get("height")?.asInt ?: 0,
+                    fps = o.getAsJsonObject("settings")?.get("fps")?.asInt ?: 0,
+                    bitrate = o.getAsJsonObject("settings")?.get("bitrate")?.asInt ?: 0,
                 )
             }
         } catch (e: Exception) {
@@ -348,7 +352,12 @@ data class InstalledGame(
     val name: String,
     val sizeBytes: Long,
     val savePath: String,
-    val finishedAt: Long
+    val finishedAt: Long,
+    val playable: Boolean = false,
+    val resWidth: Int = 0,
+    val resHeight: Int = 0,
+    val fps: Int = 0,
+    val bitrate: Int = 0
 )
 
 /** JSON bruto de resposta do PC — a tela extrai os campos que precisar. */
