@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import com.ubika.movel.ui.theme.OrbitronFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImagePainter
@@ -175,30 +176,30 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     modifier = Modifier.fillMaxSize()
                 ) {
 
-                    // --- MODO DESTAQUES (sem busca): pódio + EM ALTA ---
+                    // --- MODO DESTAQUES (sem busca): hero + pódio + prateleiras ---
                     if (globalSearchQuery.isBlank()) {
                         if (trending.isNotEmpty()) {
+                            // HERO — destaque da semana em tela cheia (estilo Big Picture)
+                            item {
+                                HeroBanner(trending.first(), soundManager) { game ->
+                                    soundManager.playSelect(); expandedGame = game; selectedVersion = null
+                                }
+                            }
                             item {
                                 Column {
-                                    Text("MAIS JOGADOS DA SEMANA", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    PodiumRow(trending.take(3)) { game ->
-                                        soundManager.playClickA(); expandedGame = game; selectedVersion = null
+                                    ShelfTitle("MAIS JOGADOS DA SEMANA")
+                                    PodiumRow(trending.take(3), soundManager) { game ->
+                                        soundManager.playSelect(); expandedGame = game; selectedVersion = null
                                     }
                                 }
                             }
                             item {
                                 Column {
-                                    Text("EM ALTA", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    ShelfTitle("EM ALTA")
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         itemsIndexed(trending.drop(3)) { index, game ->
                                             AnimatedEntry(index) {
-                                                Column(modifier = Modifier.width(84.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
-                                                    GameCover(game, Modifier.fillMaxWidth().height(112.dp).clip(RoundedCornerShape(6.dp)))
-                                                    Spacer(modifier = Modifier.height(6.dp))
-                                                    Text(game.title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                                }
+                                                ShelfCard(game, soundManager) { soundManager.playSelect(); expandedGame = game; selectedVersion = null }
                                             }
                                         }
                                     }
@@ -211,16 +212,11 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             if (gg.isEmpty()) return@forEach
                             item {
                                 Column {
-                                    Text("$genreLabel EM ALTA", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    ShelfTitle("$genreLabel EM ALTA")
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         itemsIndexed(gg) { index, game ->
                                             AnimatedEntry(index) {
-                                                Column(modifier = Modifier.width(84.dp).clickable { soundManager.playClickA(); expandedGame = game; selectedVersion = null }) {
-                                                    GameCover(game, Modifier.fillMaxWidth().height(112.dp).clip(RoundedCornerShape(6.dp)))
-                                                    Spacer(modifier = Modifier.height(6.dp))
-                                                    Text(game.title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                                }
+                                                ShelfCard(game, soundManager) { soundManager.playSelect(); expandedGame = game; selectedVersion = null }
                                             }
                                         }
                                     }
@@ -272,6 +268,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
         ) {
             gameToDisplay?.let { game ->
                 val context = LocalContext.current
+                LaunchedEffect(game.id) { soundManager.playOpen() }
                 // Auto-seleciona a primeira fonte baixável — A no controle já baixa direto
                 LaunchedEffect(game.id) {
                     if (selectedVersion == null) {
@@ -281,7 +278,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                     }
                 }
                 Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.88f)).clickable { expandedGame = null },
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.88f)).clickable { soundManager.playBack(); expandedGame = null },
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
@@ -299,7 +296,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(game.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, modifier = Modifier.weight(1f))
-                                    TextButton(onClick = { soundManager.playClickA(); expandedGame = null }, contentPadding = PaddingValues(0.dp)) {
+                                    TextButton(onClick = { soundManager.playBack(); expandedGame = null }, contentPadding = PaddingValues(0.dp)) {
                                         Text("✕", color = Color(0xFFB39DDB), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -338,7 +335,7 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
                                                     )
                                                     .onFocusChanged { focused = it.isFocused }
                                                     .focusable()
-                                                    .clickable { soundManager.playClickA(); selectedVersion = version }
+                                                    .clickable { soundManager.playSelect(); selectedVersion = version }
                                                     .padding(horizontal = 10.dp, vertical = 8.dp),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
@@ -406,6 +403,107 @@ fun CatalogScreen(soundManager: SoundManager, globalSearchQuery: String) {
     }
 }
 
+// ------------------------- Hub estilo Big Picture -------------------------
+
+/** Banner hero do #1 da semana — capa em tela cheia + título sobre gradiente. */
+@Composable
+private fun HeroBanner(game: Game, soundManager: SoundManager, onClick: (Game) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.02f else 1f, tween(180), label = "hero_s")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(210.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                if (focused) 2.dp else 1.dp,
+                if (focused) Color(0xFF9575CD) else Color(0xFF311B52),
+                RoundedCornerShape(16.dp)
+            )
+            .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
+            .focusable()
+            .clickable { onClick(game) }
+    ) {
+        // backdrop = capa do jogo cropada
+        GameCover(game, Modifier.fillMaxSize())
+        // scrim: escuro embaixo/esquerda pro texto ler
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, Color(0xFF0A0510).copy(alpha = 0.55f), Color(0xFF0A0510).copy(alpha = 0.95f))
+                )
+            )
+        )
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(
+                    listOf(Color(0xFF0A0510).copy(alpha = 0.7f), Color.Transparent)
+                )
+            )
+        )
+        Column(
+            modifier = Modifier.align(Alignment.BottomStart).padding(18.dp).fillMaxWidth(0.75f)
+        ) {
+            Box(
+                Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFF7C4DFF)).padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text("DESTAQUE DA SEMANA", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(game.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = OrbitronFamily, maxLines = 2)
+            if (game.description.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    game.description.take(140) + if (game.description.length > 140) "…" else "",
+                    color = Color(0xFFD1C4E9), fontSize = 11.sp, maxLines = 2, lineHeight = 15.sp
+                )
+            }
+        }
+        Text(
+            "VER DETALHES ›",
+            color = Color(0xFFB39DDB), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp)
+        )
+    }
+}
+
+/** Cabeçalho de prateleira — barra de acento + título. */
+@Composable
+private fun ShelfTitle(title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(4.dp).height(16.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF7C4DFF)))
+        Spacer(Modifier.width(8.dp))
+        Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = OrbitronFamily, letterSpacing = 2.sp)
+    }
+    Spacer(Modifier.height(12.dp))
+}
+
+/** Card de prateleira: zoom + brilho roxo ao focar (manete), capa + título. */
+@Composable
+private fun ShelfCard(game: Game, soundManager: SoundManager, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.08f else 1f, tween(150), label = "shelf_s")
+    val glow = if (focused) Color(0xFF9575CD) else Color(0xFF311B52)
+    Column(modifier = Modifier.width(96.dp)) {
+        GameCover(
+            game,
+            Modifier
+                .fillMaxWidth()
+                .height(128.dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF140822))
+                .border(if (focused) 2.dp else 1.dp, glow, RoundedCornerShape(10.dp))
+                .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
+                .focusable()
+                .clickable { onClick() }
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(game.title, color = if (focused) Color.White else Color(0xFFD1C4E9), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
 // ------------------------- Pódio / animações -------------------------
 
 private val medalByRank = mapOf(
@@ -416,7 +514,7 @@ private val medalByRank = mapOf(
 
 /** Pódio: prata à esquerda, ouro no centro (maior), bronze à direita — sobe escalonado. */
 @Composable
-private fun PodiumRow(games: List<Game>, onSelect: (Game) -> Unit) {
+private fun PodiumRow(games: List<Game>, soundManager: SoundManager, onSelect: (Game) -> Unit) {
     data class Slot(val game: Game, val rank: Int)
     val slots = listOfNotNull(
         games.getOrNull(1)?.let { Slot(it, 2) },
@@ -429,13 +527,13 @@ private fun PodiumRow(games: List<Game>, onSelect: (Game) -> Unit) {
         verticalAlignment = Alignment.Bottom
     ) {
         slots.forEachIndexed { order, s ->
-            PodiumSlot(s.game, s.rank, order, Modifier.weight(1f)) { onSelect(s.game) }
+            PodiumSlot(s.game, s.rank, order, soundManager, Modifier.weight(1f)) { onSelect(s.game) }
         }
     }
 }
 
 @Composable
-private fun PodiumSlot(game: Game, rank: Int, order: Int, modifier: Modifier, onClick: () -> Unit) {
+private fun PodiumSlot(game: Game, rank: Int, order: Int, soundManager: SoundManager, modifier: Modifier, onClick: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(order * 180L); visible = true }
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(500), label = "pod_a")
@@ -443,14 +541,18 @@ private fun PodiumSlot(game: Game, rank: Int, order: Int, modifier: Modifier, on
 
     val medal = medalByRank[rank] ?: Color.Gray
     val coverH = when (rank) { 1 -> 104.dp; 2 -> 84.dp; else -> 74.dp }
+    var focused by remember { mutableStateOf(false) }
+    val fscale by animateFloatAsState(if (focused) 1.06f else 1f, tween(150), label = "pod_s")
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .graphicsLayer { this.alpha = alpha; translationY = rise.toPx() }
+            .graphicsLayer { this.alpha = alpha; translationY = rise.toPx(); scaleX = fscale; scaleY = fscale }
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF140822))
-            .border(1.5.dp, medal.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
+            .border(if (focused) 2.5.dp else 1.5.dp, if (focused) medal else medal.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
+            .onFocusChanged { if (it.isFocused && !focused) soundManager.playFocusTick(); focused = it.isFocused }
+            .focusable()
             .clickable { onClick() }
             .padding(7.dp)
     ) {

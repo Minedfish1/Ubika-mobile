@@ -33,7 +33,10 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
+import com.ubika.movel.R
 import com.ubika.movel.model.Game
 import com.ubika.movel.network.UbikaApi
 import com.ubika.movel.network.UbikaSocket
@@ -245,6 +248,12 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
                         Text("MENU", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        // Diagrama do controle detectado = confirmação visual do pareamento
+                        if (padType == GamepadManager.PadType.XBOX || padType == GamepadManager.PadType.GENERIC) {
+                            Image(painterResource(R.drawable.xbox_diagram), null, modifier = Modifier.height(22.dp))
+                        } else if (padType == GamepadManager.PadType.PLAYSTATION) {
+                            Image(painterResource(R.drawable.ps_diagram), null, modifier = Modifier.height(22.dp))
+                        }
                         ActionPrompt(glyphs.menu, "OPÇÕES")
                         ActionPrompt(glyphs.confirm, "JOGAR")
                         ActionPrompt(glyphs.cancel, "VOLTAR")
@@ -381,11 +390,13 @@ fun DrawerItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVec
 }
 
 @Composable
-fun ActionPrompt(iconLabel: String, actionText: String) {
+fun ActionPrompt(iconRes: Int, actionText: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(modifier = Modifier.size(26.dp).background(Color(0xFF1E0D33), if (iconLabel == "≡") RoundedCornerShape(50) else CircleShape).border(1.dp, Color(0xFF512DA8), if (iconLabel == "≡") RoundedCornerShape(50) else CircleShape), contentAlignment = Alignment.Center) {
-            Text(text = iconLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
-        }
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(26.dp)
+        )
         Text(text = actionText, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }

@@ -164,7 +164,8 @@ fun SplashScreen(onFinished: () -> Unit) {
                 color = UbikaPurple,
                 modifier = Modifier.graphicsLayer {
                     // A perninha do U "cai" para dentro da manete formada
-                    translationY = uDrop * 150.dp.toPx()
+                    // (115dp = centro visual da silhueta, que vive ~29dp abaixo do centro da tela)
+                    translationY = uDrop * 115.dp.toPx()
                     val s = 1f - 0.45f * uDrop
                     scaleX = s
                     scaleY = s

@@ -11,6 +11,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.ubika.movel.R
 
 /**
  * Detecta controles conectados (Bluetooth/USB) e classifica o padrão
@@ -20,18 +21,26 @@ object GamepadManager {
 
     enum class PadType { NONE, XBOX, PLAYSTATION, GENERIC }
 
-    /** Rótulos dos botões de face por padrão de controle. */
+    /** Ícones reais dos botões (Xelu CC0) por padrão de controle. */
     data class Glyphs(
-        val confirm: String,   // Xbox A / PS Cross
-        val cancel: String,    // Xbox B / PS Circle
-        val altTop: String,    // Xbox Y / PS Triangle
-        val altLeft: String,   // Xbox X / PS Square
-        val menu: String
+        val confirm: Int,   // Xbox A / PS Cross
+        val cancel: Int,    // Xbox B / PS Circle
+        val altTop: Int,    // Xbox Y / PS Triangle
+        val altLeft: Int,   // Xbox X / PS Square
+        val menu: Int
     )
 
     fun glyphsFor(type: PadType): Glyphs = when (type) {
-        PadType.PLAYSTATION -> Glyphs(confirm = "✕", cancel = "◯", altTop = "△", altLeft = "□", menu = "≡")
-        else -> Glyphs(confirm = "A", cancel = "B", altTop = "Y", altLeft = "X", menu = "≡")
+        PadType.PLAYSTATION -> Glyphs(
+            confirm = R.drawable.ps_cross, cancel = R.drawable.ps_circle,
+            altTop = R.drawable.ps_triangle, altLeft = R.drawable.ps_square,
+            menu = R.drawable.ps_options
+        )
+        else -> Glyphs(
+            confirm = R.drawable.xbox_a, cancel = R.drawable.xbox_b,
+            altTop = R.drawable.xbox_y, altLeft = R.drawable.xbox_x,
+            menu = R.drawable.xbox_menu
+        )
     }
 
     fun detectNow(): PadType {

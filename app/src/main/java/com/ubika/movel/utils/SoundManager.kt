@@ -22,6 +22,15 @@ class SoundManager(private val context: Context) {
     fun playClickA() = soft(R.raw.click_a)
     fun playClickB() = soft(R.raw.click_b, 0.25f) // ainda mais suave
 
+    // Navegação estilo console (pack Kenney CC0): tick ao mover foco,
+    // select ao confirmar, back ao voltar, open ao abrir modal
+    fun playFocusTick() = soft(R.raw.focus_tick, 0.18f)
+    fun playSelect() = soft(R.raw.ui_select, 0.30f)
+    fun playBack() = soft(R.raw.ui_back, 0.30f)
+    fun playOpen() = soft(R.raw.ui_open, 0.30f)
+    fun playConfirm() = soft(R.raw.ui_confirm, 0.40f)
+    fun playSwitch() = soft(R.raw.ui_switch, 0.28f)
+
     // Transições de tela: slide suave
     fun playSlideRB() = soft(R.raw.slide_a, 0.30f)
     fun playSlideLB() = soft(R.raw.slide_a, 0.30f)

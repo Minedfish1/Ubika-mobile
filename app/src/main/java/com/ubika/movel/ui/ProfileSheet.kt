@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.ubika.movel.network.UbikaApi
+import com.ubika.movel.ui.theme.OrbitronFamily
 import com.ubika.movel.utils.SoundManager
 import kotlinx.coroutines.launch
 import java.io.File
@@ -85,20 +86,39 @@ fun ProfileSheet(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text("PERFIL", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
-
-            // Avatar grande — toque troca a foto
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .border(3.dp, Color(0xFF7C4DFF), CircleShape)
-                    .clickable { picker.launch("image/*") },
-                contentAlignment = Alignment.Center
-            ) {
-                AvatarImage(avatarPath, avatarUrl, Modifier.fillMaxSize())
+            // Cabeçalho: barra roxa + título Orbitron + fechar
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(4.dp, 18.dp).background(Color(0xFF7C4DFF)))
+                Spacer(Modifier.width(10.dp))
+                Text("PERFIL", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                    fontFamily = OrbitronFamily, letterSpacing = 3.sp, modifier = Modifier.weight(1f))
+                Text("✕", color = Color(0xFFB39DDB), fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { soundManager.playBack(); onClose() })
             }
-            Text("Toque na foto para trocar", color = Color.Gray, fontSize = 11.sp)
+
+            // Avatar com badge de edição — toque troca a foto
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    modifier = Modifier
+                        .size(110.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, Color(0xFF7C4DFF), CircleShape)
+                        .clickable { picker.launch("image/*") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AvatarImage(avatarPath, avatarUrl, Modifier.fillMaxSize())
+                }
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF7C4DFF))
+                        .border(2.dp, Color(0xFF140822), CircleShape)
+                        .clickable { picker.launch("image/*") },
+                    contentAlignment = Alignment.Center
+                ) { Text("✎", color = Color.White, fontSize = 13.sp) }
+            }
+
             // Conta do usuário
             if (email.isNotBlank()) {
                 Text(email, color = Color(0xFF8a7fa8), fontSize = 12.sp)
@@ -150,9 +170,10 @@ fun ProfileSheet(
                 }
             }
 
-            UbikaSheetButton("FECHAR", subtle = true) { soundManager.playClickA(); onClose() }
-            Text("SAIR DA CONTA", color = Color(0xFFEF5350), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { soundManager.playClickA(); onLogout() })
+            UbikaSheetButton("FECHAR", subtle = true) { soundManager.playBack(); onClose() }
+            Text("SAIR DA CONTA", color = Color(0xFFEF5350), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.clickable { soundManager.playBack(); onLogout() })
         }
     }
 

@@ -28,7 +28,8 @@ data class DownloadItem(
     var progress: Float, // 0.0 a 100.0
     var speed: String,
     var state: String,
-    var peers: Int = 0
+    var peers: Int = 0,
+    var installProgress: Float = -1f // -1 = indeterminado
 )
 
 private fun JSONObject.toDownloadItem(existing: DownloadItem? = null): DownloadItem {
@@ -44,16 +45,21 @@ private fun JSONObject.toDownloadItem(existing: DownloadItem? = null): DownloadI
         progress = optDouble("progress", 0.0).toFloat(),
         speed = speedStr,
         state = optString("state", existing?.state ?: "downloading"),
-        peers = optInt("peers", existing?.peers ?: 0)
+        peers = optInt("peers", existing?.peers ?: 0),
+        installProgress = optDouble("installProgress", -1.0).toFloat()
     )
 }
 
-private fun isDone(state: String) = state == "done" || state == "finished"
+private fun isDone(state: String) = state == "done" || state == "finished" || state == "ready"
+private fun isTerminalOk(state: String) = state == "ready"
 
 private fun stateLabel(state: String) = when (state) {
     "fetching-metadata" -> "Buscando metadados..."
     "downloading" -> "Baixando"
     "paused" -> "Pausado"
+    "installing" -> "Instalando"
+    "install_error" -> "Falha na instalação"
+    "ready" -> "Pronto p/ jogar"
     "done", "finished" -> "Concluído"
     "error" -> "Erro"
     "removed" -> "Removido"
@@ -71,10 +77,13 @@ fun DownloadsScreen(soundManager: SoundManager) {
         val idx = activeDownloads.indexOfFirst { it.id == id }
         val old = activeDownloads.getOrNull(idx)
         val item = json.toDownloadItem(old)
-        // Transição para concluído → som + notificação do sistema
-        if (isDone(item.state) && old != null && !isDone(old.state)) {
+        // Transição para concluído/instalado → som + notificação do sistema
+        if (item.state == "ready" && old?.state != "ready") {
+            soundManager.playConfirm()
+            soundManager.showSystemNotification("Jogo pronto p/ jogar", item.gameName)
+        } else if (item.state == "done" && old != null && old.state != "done" && old.state != "ready") {
             soundManager.playNotification()
-            soundManager.showSystemNotification("Download concluído", item.gameName)
+            soundManager.showSystemNotification("Download concluído — instalando", item.gameName)
         }
         if (item.state == "removed") {
             if (idx >= 0) activeDownloads.removeAt(idx)
@@ -129,12 +138,26 @@ fun DownloadsScreen(soundManager: SoundManager) {
                                     Text(download.speed, color = Color(0xFF00C853), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
 
-                                LinearProgressIndicator(
-                                    progress = { download.progress / 100f },
-                                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    color = if (isDone(download.state)) Color(0xFF00C853) else Color(0xFF7C4DFF),
-                                    trackColor = Color(0xFF1E0D33)
-                                )
+                                if (download.state == "installing" && download.installProgress < 0f) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth().height(8.dp),
+                                        color = Color(0xFFFFB300),
+                                        trackColor = Color(0xFF1E0D33)
+                                    )
+                                } else {
+                                    val shown = if (download.state == "installing") download.installProgress else download.progress
+                                    LinearProgressIndicator(
+                                        progress = { (shown / 100f).coerceIn(0f, 1f) },
+                                        modifier = Modifier.fillMaxWidth().height(8.dp),
+                                        color = when {
+                                            download.state == "installing" -> Color(0xFFFFB300)
+                                            isDone(download.state) -> Color(0xFF00C853)
+                                            download.state == "install_error" -> Color(0xFFE53935)
+                                            else -> Color(0xFF7C4DFF)
+                                        },
+                                        trackColor = Color(0xFF1E0D33)
+                                    )
+                                }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -142,7 +165,14 @@ fun DownloadsScreen(soundManager: SoundManager) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        "${stateLabel(download.state)} — ${download.progress}% • ${download.peers} peers",
+                                        when {
+                                            download.state == "installing" ->
+                                                if (download.installProgress >= 0f) "Instalando — ${download.installProgress.toInt()}%"
+                                                else "Instalando (setup)…"
+                                            download.state == "install_error" -> "Falha na instalação — veja o PC"
+                                            download.state == "ready" -> "Pronto p/ jogar ✓"
+                                            else -> "${stateLabel(download.state)} — ${download.progress}% • ${download.peers} peers"
+                                        },
                                         color = Color(0xFFB39DDB), fontSize = 11.sp
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -156,7 +186,7 @@ fun DownloadsScreen(soundManager: SoundManager) {
                                                 UbikaSocket.downloadAction("retomar_download", download.id)
                                             }
                                         }
-                                        if (download.state == "paused" || isDone(download.state) || download.state == "error") {
+                                        if (download.state == "paused" || isDone(download.state) || download.state == "error" || download.state == "install_error") {
                                             DownloadAction("REMOVER") {
                                                 UbikaSocket.downloadAction("remover_download", download.id)
                                             }
