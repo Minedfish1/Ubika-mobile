@@ -103,7 +103,15 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
         if (me.name.isNotEmpty()) { userName = me.name; prefs.edit().putString("user_name", me.name).apply() }
         if (me.email.isNotEmpty()) { userEmail = me.email; prefs.edit().putString("user_email", me.email).apply() }
         if (me.avatarUrl.isNotEmpty()) avatarUrl = "${me.avatarUrl}?v=${System.currentTimeMillis() / 60000}"
-        while (true) { delay(1000); currentTime = LocalTime.now() }
+        var lastPadSent = GamepadManager.detectNow() != GamepadManager.PadType.NONE
+        UbikaSocket.emitAppState(true, lastPadSent)
+        while (true) {
+            delay(1000)
+            currentTime = LocalTime.now()
+            // Controle plugou/desplugou no celular → avisa o PC (libera o console)
+            val padNow = GamepadManager.detectNow() != GamepadManager.PadType.NONE
+            if (padNow != lastPadSent) { lastPadSent = padNow; UbikaSocket.emitAppState(true, padNow) }
+        }
     }
 
     // Som suave ao trocar de tela (não toca na primeira composição)
@@ -126,13 +134,21 @@ fun MainConsoleScreen(onLogout: () -> Unit = {}) {
         }
     }
 
-    // App sai do background → socket morreu → reconecta e reanuncia resolução
+    // App sai do background → socket morreu → reconecta e reanuncia resolução.
+    // Também avisa o PC o estado do app (foreground + controle no celular):
+    // o console do PC só libera com o celular plugado e o app aberto.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                UbikaSocket.connect(UbikaApi.userId)
-                UbikaSocket.announceClient()
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    UbikaSocket.connect(UbikaApi.userId)
+                    UbikaSocket.announceClient()
+                    UbikaSocket.emitAppState(true, GamepadManager.detectNow() != GamepadManager.PadType.NONE)
+                }
+                Lifecycle.Event.ON_STOP ->
+                    UbikaSocket.emitAppState(false, GamepadManager.detectNow() != GamepadManager.PadType.NONE)
+                else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

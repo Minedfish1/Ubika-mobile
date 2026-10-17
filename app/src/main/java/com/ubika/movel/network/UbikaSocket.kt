@@ -45,6 +45,7 @@ object UbikaSocket {
             mSocket?.on(Socket.EVENT_CONNECT) {
                 Log.d(TAG, "conectado: ${mSocket?.id()}")
                 announceClient() // primeira ação: PC fica sabendo a resolução exata
+                emitAppState(lastForeground, lastGamepad)
             }
             mSocket?.on(Socket.EVENT_CONNECT_ERROR) { a -> Log.e(TAG, "connect_error: ${a.firstOrNull()}") }
             mSocket?.on(Socket.EVENT_DISCONNECT) { a -> Log.d(TAG, "disconnect: ${a.firstOrNull()}") }
@@ -149,6 +150,20 @@ object UbikaSocket {
     /** Pede ao PC para voltar o display ao normal (se não houver stream). */
     fun restoreDisplay() {
         sendCommand(JSONObject().put("action", "restaurar_display"))
+    }
+
+    /** App avisa ao PC: foreground + se há controle no celular (libera o console do PC). */
+    private var lastForeground = true
+    private var lastGamepad = false
+    fun emitAppState(foreground: Boolean, gamepad: Boolean = false) {
+        lastForeground = foreground; lastGamepad = gamepad
+        try {
+            val data = JSONObject()
+                .put("userId", userId)
+                .put("foreground", foreground)
+                .put("gamepad", gamepad)
+            mSocket?.emit("app_state", data)
+        } catch (e: Exception) { Log.e(TAG, "emitAppState falhou", e) }
     }
 
     /** Registra listener de progresso vindo do PC (evento `download_progress`). */
